@@ -1,0 +1,27 @@
+Build a multilayer perceptron (MLP) to classify residues in secondary structures
+This is a simple classification task:
+
+Input: per-residue embedding vector
+
+Output: one of the 3 secondary structure classes:
+
+H → helix
+E → sheet
+C → coil
+MLP architecture:
+
+Input layer: embedding dimension (480)
+
+Hidden layer(s): 256 → 128
+
+Dropout (optional)
+
+Output: 3-way softmax
+
+Train two separate models:
+
+MLP_seq_only
+MLP_seq+3Di
+Use cross-entropy loss and early stopping.
+
+Goal: Compare accuracy on test residues.
