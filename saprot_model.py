@@ -60,7 +60,7 @@ def foldseek_labels(pdb_path):
     # Extract the "A" chain from the pdb file and encode it into a struc_seq
     # pLDDT is used to mask low-confidence regions if "plddt_mask" is True. Please set it to True when
     # use AF2 structures for best performance.
-    parsed_seqs = get_struc_seq("/home/mari/repositories/vib_leuven/foldseek", pdb_path, ["A"], plddt_mask=False)["A"]
+    parsed_seqs = get_struc_seq("/home/mari/scripts/vib_leuven/foldseek", pdb_path, ["A"], plddt_mask=False)["A"]
     seq, foldseek_seq, combined_seq = parsed_seqs
     combined_seq_masked = "".join([c if c.isupper() else "#" for c in combined_seq])
     print(f"seq length: {len(seq)}")
