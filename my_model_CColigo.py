@@ -19,39 +19,26 @@ from sklearn.decomposition import PCA
 import pandas as pd
 from collections import Counter
 
-
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print("\n\n")
 # Annotate secondary structure with DSSP
 def dssp_labels(pdb_id, pdb_path):
+    selected_chain=""
     numeric_label = []
-    annotated = pd.read_csv("/media/mari/Data/vib_leuven/datasets/cc_membprot/annotated_ccs.csv",header=0, sep="\t")
-    annotated = annotated.set_index("pdb")
-    cc_check = True
-    if pdb_id in annotated.index:
-        chain_options = annotated.at[pdb_id,"cc_chain"]
-        cc_check = True
-        try:
-            if len(chain_options) > 0:
-                pass
-        except:
-            chain_options = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
-        selected_chain = ""
-
-    else:
-        chain_options = ["A","B","C","D","E","F","G","H","I","J"]
-        selected_chain = ""
-        cc_check = False
-
+    annotated = pd.read_csv("/media/mari/Data/vib_leuven/datasets/cc_sasa/20example/random20.csv",header=0, sep="\t")
+    chain_options = annotated.at[pdb_id,"CC_chains"].split(",")
+    oligo = annotated.at[pdb_id,"oligo"]
+    orient = annotated.at[pdb_id,"orient"]
+    pdb_id = annotated.at[pdb_id,"pdb"]
     label_map = {"H":0,"B":1,"E":2,"G":3,"I":4,"T":5,"S":6,"P":7,"-":8}
     parser = PDBParser(QUIET=True)
-    io = PDBIO()
     structure = parser.get_structure(pdb_id, pdb_path)
     pdb_model = structure[0]
+    print(pdb_model, pdb_path)
     dssp = DSSP(pdb_model, pdb_path)
+    print(len(dssp))
     print("\npdb:", pdb_id,"residues:", len(dssp))
     # Obtain SS labels with DSSP
-    annotated_chains = [key[0] for key in dssp.keys()]
     for key in dssp.keys():
         chain_id, res_id = key
         if chain_id not in chain_options:
@@ -84,10 +71,15 @@ def dssp_labels(pdb_id, pdb_path):
 
     # Numeric labels array
     labels_np = np.array([label_map.get(ch, 8) for ch in residue_labels], dtype=np.int64)
-    if cc_check == True:
-        numeric_label = 1
-    else:
-        numeric_label = 0
+    if int(oligo) == 2:
+        if orient == "antiparallel":
+            numeric_label = 1
+        else:
+            numeric_label = 0
+    elif int(oligo) == 3:
+        numeric_label = 2
+    elif int(oligo) == 4:
+        numeric_label = 3
     print("\t- Built labels from DSSP. n_labels =", labels_np.shape[0])
     print("\t- Binary CC (1) vs TM (0) label:", numeric_label)
     numeric_label = np.array(numeric_label)
@@ -137,10 +129,12 @@ def foldseek_labels(pdb_path, selected_chain, labelnum, labels_dssp):
     #print(f"\t- combined_seq: {combined_seq}")
     print(f"\t- combined_seq_masked length: {len(combined_seq_masked)}")
     #print(f"\t- combined_seq_masked: {combined_seq_masked}")
+    """
     numeric_labels = list()
     for i in range(len(seq)):
         numeric_labels.append(labelnum)
-    return seq, foldseek_seq, combined_seq, combined_seq_masked, numeric_labels
+    """
+    return seq, foldseek_seq, combined_seq, combined_seq_masked
 
 # Load pre-trained SaProt models directly
 # Load SaProt small model
@@ -202,6 +196,7 @@ def residue_emb_struct_aware(device, combined_seq):
     return emb_struct
 
 def train_test_subsets(emb, labels_np):
+    labels_np = np.array(labels_np)
     indices = np.arange(labels_np.shape[0])
     try:
         train_idx, test_idx = train_test_split(indices, test_size=0.2, random_state=42, stratify=labels_np)
@@ -209,102 +204,126 @@ def train_test_subsets(emb, labels_np):
         train_idx, test_idx = train_test_split(indices, test_size=0.2, random_state=42)
     y_train = labels_np[train_idx]
     y_test = labels_np[test_idx]
-    emb_train = emb[train_idx]
-    emb_test = emb[test_idx]
+    emb_train = [emb[i] for i in train_idx]
+    emb_test = [emb[i] for i in test_idx]
     class_weights = compute_class_weight(
         class_weight="balanced",
         classes=np.unique(y_train),
         y=y_train
     )
-    print("Class weights:", class_weights)
     class_weights = torch.tensor(class_weights, dtype=torch.float).to(device)
+    print("Class weights:", class_weights)
     return emb_train, emb_test, y_train, y_test, class_weights
 
 def pytorch_dataset_dataloader(emb_train, emb_test, y_train, y_test):
-    class ResidueDataset(Dataset):
+    class ProteinDataset(Dataset):
         def __init__(self, embeddings, labels):
-            self.embeddings = torch.tensor(embeddings, dtype=torch.float32)
-            self.labels = torch.tensor(labels, dtype=torch.long)
+            self.embeddings = embeddings
+            self.labels = labels
         def __len__(self):
             return len(self.labels)
         def __getitem__(self, idx):
-            return self.embeddings[idx], self.labels[idx]
-
+            # convert individual protein to torch tensor here
+            emb = torch.tensor(self.embeddings[idx], dtype=torch.float32)
+            label = self.labels[idx]
+            return emb, label
+    """
     class_counts = np.bincount(y_train)
     class_weights = 1.0 / class_counts
     sample_weights = class_weights[y_train]
-
+    # A sampler controls how often each sample is drawn during training.
+    # Minority-class samples are seen more often
+    # Majority-class samples are seen less often
+    # Batches become roughly class-balanced
     sampler = WeightedRandomSampler(
         weights=sample_weights,
         num_samples=len(sample_weights),
         replacement=True
     )
-
-    train_dataset = ResidueDataset(emb_train, y_train)
-    test_dataset = ResidueDataset(emb_test, y_test)
-    train_loader = DataLoader(train_dataset, batch_size=32, sampler=sampler)
-    test_loader = DataLoader(test_dataset, batch_size=32)
+    """
+    train_dataset = ProteinDataset(emb_train, y_train)
+    test_dataset = ProteinDataset(emb_test, y_test)
+    # Batch size of 1 because proteins have viable residue length
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=1)
     return train_loader, test_loader
+
+# Attention pooling module for protein-level embeddings: focus attention on most impactful residues
+class AttentionPooling(nn.Module):
+    def __init__(self, input_dim):
+        super().__init__()
+        self.attn = nn.Linear(input_dim, 1)
+
+    def forward(self, residue_embeddings):  # shape (L, D)
+        scores = self.attn(residue_embeddings).squeeze(-1)       # [L]
+        alpha = F.softmax(scores, dim=0)                        # [L]
+        protein_emb = (alpha[:, None] * residue_embeddings).sum(dim=0)  # [D]
+        return protein_emb, alpha
 
 # MLP model
 class MLP(nn.Module):
-    def __init__(self, input_dim, hidden_dims=[256, 128], num_classes=2, dropout=0.2):
+    def __init__(self, input_dim, hidden_dims=[256,128], num_classes=4, dropout=0.2):
         super().__init__()
-        self.model = nn.Sequential(
-            nn.Linear(input_dim, hidden_dims[0]),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dims[0], hidden_dims[1]),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dims[1], num_classes)
-        )
-    def forward(self, x):
-        return self.model(x)
+        self.attn_pool = AttentionPooling(input_dim)
+        self.fc1 = nn.Linear(input_dim, hidden_dims[0])
+        self.relu = nn.ReLU()
+        self.dropout1 = nn.Dropout(dropout)
+        self.fc2 = nn.Linear(hidden_dims[0], hidden_dims[1])
+        self.dropout2 = nn.Dropout(dropout)
+        self.fc3 = nn.Linear(hidden_dims[1], num_classes)
+
+    def forward(self, residue_embeddings):
+        protein_emb, alpha = self.attn_pool(residue_embeddings)
+        x = self.fc1(protein_emb)
+        x = self.relu(x)
+        x = self.dropout1(x)
+        x = self.fc2(x)
+        x = self.relu(x)
+        x = self.dropout2(x)
+        logits = self.fc3(x)
+        return logits, alpha
 # ---------------------------
 # Training function
 # ---------------------------
-def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=20):
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+def train_mlp(model, train_loader, test_loader, class_weights,lr=1e-3, epochs=20):
     model.to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
     optimizer = optim.Adam(model.parameters(), lr=lr)
-    best_acc = 0.0
-    best_preds = None
-    best_labels = None
+    best_acc, best_preds, best_labels = 0.0, None, None
+
     for epoch in range(epochs):
         model.train()
-        for X_batch, y_batch in train_loader:
-            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+        for residues, labels in train_loader:
             optimizer.zero_grad()
-            logits = model(X_batch)
-            loss = criterion(logits, y_batch)
+            emb = residues[0].to(device)   # batch size = 1
+            label = torch.tensor([labels[0]], dtype=torch.long).to(device)
+            logits, _ = model(emb)
+            loss = criterion(logits.unsqueeze(0), label)
             loss.backward()
             optimizer.step()
+
         # Evaluate
         model.eval()
-        preds = []
-        labels_eval = []
+        preds, labels_eval = [], []
         with torch.no_grad():
-            for X_batch, y_batch in test_loader:
-                X_batch = X_batch.to(device)
-                logits = model(X_batch)
-                pred = logits.argmax(dim=1).cpu().numpy()
-                preds.extend(pred)
-                labels_eval.extend(y_batch.cpu().numpy())
+            for residues, labels in test_loader:
+                emb = residues[0].to(device)
+                logits, _ = model(emb)
+                pred = logits.argmax(dim=0).cpu().item()
+                preds.append(pred)
+                labels_eval.append(labels[0])
         acc = accuracy_score(labels_eval, preds)
         if acc > best_acc:
-            best_acc = acc
-            best_preds = preds.copy()
-            best_labels = labels_eval.copy()
-        print(f"\tEpoch {epoch + 1}/{epochs} - Test accuracy: {acc:.4f} (best: {best_acc:.4f})")
+            best_acc, best_preds, best_labels = acc, preds.copy(), labels_eval.copy()
+        print(f"Epoch {epoch+1}/{epochs} - Test Accuracy: {acc:.4f} (best: {best_acc:.4f})")
+
     return model, best_preds, best_labels
 
 def plot_confusion(preds, labels, tag, title="Confusion Matrix"):
     cm = confusion_matrix(labels, preds)
     plt.figure(figsize=(6,5))
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
-                xticklabels=["TM","CC"], yticklabels=["TM","CC"])
+                xticklabels=["Dimer-P","Dimer-A","Trimer","Tetramer"], yticklabels=["Dimer-P","Dimer-A","Trimer","Tetramer"])
     plt.xlabel("Predicted")
     plt.ylabel("True")
     plt.title(title)
@@ -337,17 +356,20 @@ errors =  open(f"errors_{sys.argv[1].split('.')[0]}.txt","w")
 all_labels_num = list()
 all_seq_embs = list()
 all_struct_aware_embs = list()
-pdbs = open(sys.argv[1], "r").read().splitlines()
-for pdb in pdbs:
+#pdbs = open(sys.argv[1], "r").read().splitlines()
+pdbs = pd.read_csv(sys.argv[1],sep="\t",header=0)
+for i in pdbs.index:
+    pdb_id = f"{pdbs.at[i,'pdb']}_{pdbs.at[i,'biomol']}"
+    pdb = pdbs.at[i,"pdb"]
+    biomol = pdbs.at[i,"biomol"]
     try:
-        pdb_path = f"/media/mari/Data/vib_leuven/datasets/cc_membprot/pdb_files/{pdb}.pdb"
-        pdb_id = pdb
-        label_num, selected_chain, labels_dssp = dssp_labels(pdb_id,pdb_path)  # Get true labels with DSSP annotation, labels are converted into numerical
+        pdb_path = f"/media/mari/Data/vib_leuven/datasets/cc_sasa/pdb_files/{pdb.upper()}_{biomol}.pdb"
+        label_num, selected_chain, labels_dssp = dssp_labels(i,pdb_path)  # Get true labels with DSSP annotation, labels are converted into numerical
     except:
         errors.write(f"{pdb}\tCould not assign labels\n")
         continue
     try:
-        seq, foldseek_seq, combined_seq, combined_seq_masked, labels_num = foldseek_labels(pdb_path, selected_chain, label_num, labels_dssp)  # Obtain foldseek annotation of structural information
+        seq, foldseek_seq, combined_seq, combined_seq_masked = foldseek_labels(pdb_path, selected_chain, label_num, labels_dssp)  # Obtain foldseek annotation of structural information
     except:
         errors.write(f"{pdb}\tCould not assign foldseek sequence\n")
         continue
@@ -361,6 +383,7 @@ for pdb in pdbs:
     except:
         errors.write(f"{pdb}\tCould not assign structure aware embeddings\n")
         continue
+    """
     print(f"\tShape of labels: {len(labels_num)}")
 
     if len(labels_num) != seq_emb.shape[0]:
@@ -370,25 +393,19 @@ for pdb in pdbs:
             f"\tLength mismatch: emb_struct {struct_aware_emb.shape[0]}, labels {len(labels_num)}")
     else:
         print(f"\t\u2713 Equal embeddings and DSSP labels shape ({struct_aware_emb.shape}, {len(labels_num)}).")
+    """
+    all_seq_embs.append(seq_emb)
+    all_struct_aware_embs.append(struct_aware_emb)
+    all_labels_num.append(label_num)
 
-    for ele in seq_emb:
-        all_seq_embs.append(ele)
-    for ele in struct_aware_emb:
-        all_struct_aware_embs.append(ele)
-    for ele in labels_num:
-        all_labels_num.append(ele)
-
-all_seq_embs = np.array(all_seq_embs)
-all_struct_aware_embs = np.array(all_struct_aware_embs)
-all_labels_num = np.array(all_labels_num)
 # Consistency check
 print("\nChecking all inputs:\n==========================================================================")
-if all_seq_embs.shape[0] != all_labels_num.shape[0]:
-    raise ValueError(f"Length mismatch: emb_seq {all_seq_embs.shape[0]}, labels {all_labels_num.shape[0]}")
-elif all_struct_aware_embs.shape[0] != all_labels_num.shape[0]:
-    raise ValueError(f"Length mismatch: emb_struct {all_struct_aware_embs.shape[0]}, labels {all_labels_num.shape[0]}")
+if len(all_seq_embs) != len(all_labels_num):
+    raise ValueError(f"Length mismatch: emb_seq {len(all_seq_embs)}, labels {len(all_labels_num)}")
+elif len(all_struct_aware_embs) != len(all_labels_num):
+    raise ValueError(f"Length mismatch: emb_struct {len(all_struct_aware_embs)}, labels {len(all_labels_num)}")
 else:
-    print(f"\u2713 Equal embeddings and DSSP labels shape ({all_seq_embs.shape}, {all_labels_num.shape}).")
+    print(f"\u2713 Equal embeddings and labels shape ({len(all_seq_embs)}, {len(all_labels_num)}).")
 
 # Only seq-based model
 train_seq_emb, test_seq_emb, y_train, y_test, class_weights_seq = train_test_subsets(all_seq_embs, all_labels_num)
@@ -404,22 +421,22 @@ train_struct_aware_emb, test_struct_aware_emb, y_train, y_test, class_weights_st
 train_loader_struct, test_loader_struct = pytorch_dataset_dataloader(train_struct_aware_emb, test_struct_aware_emb, y_train, y_test)
 
 # MLP model training with own dataset
-embedding_dim = all_struct_aware_embs.shape[1]
+embedding_dim = all_struct_aware_embs[0].shape[1]
 
 print("Training on sequence-only embeddings...")
 mlp_seq = MLP(input_dim=embedding_dim)
-mlp_seq, preds_seq, labels_seq = train_mlp(mlp_seq, train_loader_seq, test_loader_seq, class_weights_seq, lr=1e-3, epochs=20)
+mlp_seq, preds_seq, labels_seq = train_mlp(mlp_seq, train_loader_seq, test_loader_seq,class_weights_seq, lr=1e-3, epochs=20)
 
 print("Training on sequence+3Di embeddings...")
 mlp_struct = MLP(input_dim=embedding_dim)
-mlp_struct, preds_struct, labels_struct = train_mlp(mlp_struct, train_loader_struct, test_loader_struct, class_weights_struc,lr=1e-3, epochs=20)
+mlp_struct, preds_struct, labels_struct = train_mlp(mlp_struct, train_loader_struct, test_loader_struct,class_weights_struc, lr=1e-3, epochs=20)
 # MLP model evaluation
 
 print("\nSequence-only classification report:")
-print(classification_report(labels_seq, preds_seq, labels=list(range(2))))
+print(classification_report(labels_seq, preds_seq, labels=list(range(4))))
 
 print("\nSequence+3Di classification report:")
-print(classification_report(labels_struct, preds_struct, labels=list(range(2))))
+print(classification_report(labels_struct, preds_struct, labels=list(range(4))))
 
 # Additional plots
 # Confusion matrix (true vs predicted labels)
