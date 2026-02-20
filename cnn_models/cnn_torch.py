@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
-writer = SummaryWriter(log_dir="runs/2vs3vs4_allImages_classifier")
+writer = SummaryWriter(log_dir="runs/2PvsA_testeval_classifier")
 import torchvision.utils as vutils
 from torch.utils.data import Dataset, DataLoader
 import torchvision
@@ -21,6 +21,30 @@ from collections import defaultdict, Counter
 parser = PDBParser(QUIET=True)
 
 errors = open("errors.txt","w")
+
+residue_types = {
+    'ALA': 'hydrophobic',
+    'ARG': 'basic',
+    'ASN': 'polar',
+    'ASP': 'acidic',
+    'CYS': 'polar',
+    'GLN': 'polar',
+    'GLU': 'acidic',
+    'GLY': 'disruptive',
+    'HIS': 'basic',
+    'ILE': 'hydrophobic',
+    'LEU': 'hydrophobic',
+    'LYS': 'basic',
+    'MET': 'hydrophobic',
+    'PHE': 'hydrophobic',
+    'PRO': 'disruptive',
+    'SER': 'polar',
+    'THR': 'polar',
+    'TRP': 'hydrophobic',
+    'TYR': 'polar',
+    'VAL': 'hydrophobic'
+}
+
 
 class Net(nn.Module): # Currently an autoencoder
     def __init__(self, input_channels=3, num_classes=3, image_size=(128,128)):
@@ -105,7 +129,12 @@ class CustomImageDataset(Dataset):
     def __getitem__(self, idx):
         img_path = os.path.join(self.img_dir, f"{self.img_labels.iloc[idx, 0].upper()}.png")
         # Load image as PIL Image ("L" for greyscale, "RGB" for color)
-        image = Image.open(img_path).convert("L")  # ✅ compatible with ToTensor() in the transformer
+        if "--color" in sys.argv:
+            image = Image.open(img_path).convert("RGB")  # ✅ compatible with ToTensor() in the transformer
+        elif "--rgba" in sys.argv:
+            image = Image.open(img_path).convert("RGBA")
+        else:
+            image = Image.open(img_path).convert("L")
         label = self.classes[self.img_labels.iloc[idx, 1]]
         label = torch.tensor(label, dtype=torch.long)  # ✅ convert to tensor
         if self.transform:
@@ -141,7 +170,12 @@ class FragmentedImageDataset(Dataset):
     def __getitem__(self, idx):
         img_path, label = self.samples[idx]
         # Load single image
-        image = Image.open(img_path).convert("L")
+        if "--color" in sys.argv:
+            image = Image.open(img_path).convert("RGB")  # ✅ compatible with ToTensor() in the transformer
+        elif "--rgba" in sys.argv:
+            image = Image.open(img_path).convert("RGBA")
+        else:
+            image = Image.open(img_path).convert("L")
         label = torch.tensor(label, dtype=torch.long)
         if self.transform:
             image = self.transform(image)
@@ -164,6 +198,7 @@ def generateImages(file, pdb_dir, classes, fragmented=False):
         projected = list()
         coordsCA = list()
         chainsRes = list()
+        residues_list = list()
         #coordsLateral = list()
         try:
             structure = parser.get_structure(code, os.path.join(pdb_dir, f"{code}.pdb"))
@@ -190,6 +225,7 @@ def generateImages(file, pdb_dir, classes, fragmented=False):
                         if atom.id == "CA":
                             coordsCA.append(atom.coord)
                             chainsRes.append(chain.id)
+                            residues_list.append(residue.get_resname())
                         #elif atom.id not in ["CA", "C", "O", "N"]:
                         #    side_chain.append(atom.coord)
                     #if len(side_chain) == 0:
@@ -215,29 +251,55 @@ def generateImages(file, pdb_dir, classes, fragmented=False):
             while counter < len(projected_str):
                 projected = np.array([p for p in projected_str if
                                       (projected_str[counter][0] + window) >= p[0] >= projected_str[counter][0]])
+                proj_residues = np.array([r for p,r in zip(projected_str, residues_list) if
+                                      (projected_str[counter][0] + window) >= p[0] >= projected_str[counter][0]])
                 counter += len(projected)
                 if len(projected) >= 7 * int(classes[label]):
                     projected_path = f"imgs/projected/{code}_{counter}.png"
                     connected_path = f"imgs/connected/{code}_{counter}.png"
                     # center 12.8 Å window on fragment
-                    x_center = projected[:, 1].mean()
-                    y_center = projected[:, 2].mean()
+                    x_center = projected[:, 0].mean()
+                    y_center = projected[:, 1].mean()
+                    z_center = projected[:, 2].mean()
                     x_min = x_center - ANGSTROM_SPAN / 2.0
                     x_max = x_center + ANGSTROM_SPAN / 2.0
                     y_min = y_center - ANGSTROM_SPAN / 2.0
                     y_max = y_center + ANGSTROM_SPAN / 2.0
+                    z_min = z_center - ANGSTROM_SPAN / 2.0
+                    z_max = z_center + ANGSTROM_SPAN / 2.0
                     dpi = TARGET_PIXELS  # 1 inch = 128 px
                     fig = plt.figure(figsize=(1, 1), dpi=dpi)  # 128×128 px output [web:24][web:26]
                     # axes that fill the whole figure: [left, bottom, width, height] in 0–1
                     ax = fig.add_axes([0, 0, 1, 1])
                     ax.set_aspect("equal")
                     ax.axis("off")
-                    ax.set_xlim(x_min, x_max)
-                    ax.set_ylim(y_min, y_max)  # 12.8 Å in each direction -> 10 px/Å
-                    ax.scatter(projected[:, 1], projected[:, 2], c="#000000", marker=".")
+                    ax.set_ylim(x_min, x_max)
+                    #ax.set_xlim(z_min, z_max)
+                    ax.set_xlim(z_min, z_max)  # 12.8 Å in each direction -> 5 px/Å
+                    # Get residue names for this fragment (in same order as projected)
+                    resnames = proj_residues
+                    types_in_fragment = [residue_types.get(resname, 'unknown') for resname in resnames]
+                    # Color map for types
+                    color_map = {
+                        'hydrophobic': '#1f77b4',  # blue
+                        'polar': '#ff7f0e',  # orange
+                        'acidic': '#d62728',  # red
+                        'basic': '#2ca02c'  # green
+                    }
+                    color_map = {
+                        'hydrophobic': '#d62728',  # red
+                        'polar': '#1f77b4',  # blue
+                        'acidic': '#1f77b4',  # blue
+                        'basic': '#1f77b4',  # blue
+                        'disruptive': '#2ca02c' # green
+                    }
+                    colors = [color_map.get(res_type, '#808080') for res_type in types_in_fragment]
+                    # Now plot with per-point colors:
+                    ax.scatter(projected[:, 2], projected[:, 0],
+                               c=colors, s=20, marker='.')
                     fig.savefig(projected_path, transparent=True)
                     for i in range(len(projected) - 1):
-                        ax.plot(projected[i:i + 2, 1], projected[i:i + 2, 2], color="#000000")
+                        ax.plot(projected[i:i + 2, 2], projected[i:i + 2, 0], color="black", linewidth=0.5)
                     fig.savefig(connected_path, transparent=True)
                     plt.close(fig)
         else:
@@ -259,10 +321,12 @@ def generateImages(file, pdb_dir, classes, fragmented=False):
 
 
 def imshow(img):
-    img = img / 2 + 0.5     # unnormalize
+    img = img / 2 + 0.5     # unnormalize [-1,1] → [0,1]
     npimg = img.numpy()
-    plt.imshow(np.transpose(npimg, (1, 2, 0)))
+    plt.imshow(np.transpose(npimg, (1, 2, 0)))  # RGB image → NO cmap!
+    plt.axis('off')
     plt.show()
+
 
 
 def main():
@@ -273,21 +337,21 @@ def main():
     source = sys.argv[1]
     rootdir = os.getcwd()
     df = pd.read_csv(source, sep="\t",header=0)
-    # Split 80% train, 20% test, stratified by 'oligo'
+    # Split 80% train, 20% test, stratified by 'orient'
     train_df, test_df = train_test_split(
         df,
-        test_size=0.2,
+        test_size=0.3,
         random_state=312,  # for reproducibility
-        stratify=df['oligo']  # ensures oligo distribution is similar
+        stratify=df['orient']  # ensures orient distribution is similar
     )
-    class_list = sorted(df["oligo"].unique())
+    class_list = sorted(df["orient"].unique())
     idx_to_class = {i: c for i, c in enumerate(class_list)}
     class_to_idx = {c: i for i, c in idx_to_class.items()}
     # Check
     print("Train set class distribution:")
-    print(train_df['oligo'].value_counts(normalize=True))
+    print(train_df['orient'].value_counts(normalize=True))
     print("\nTest set class distribution:")
-    print(test_df['oligo'].value_counts(normalize=True))
+    print(test_df['orient'].value_counts(normalize=True))
     # Saving train/test datasets
     train_df.to_csv("train_set.csv", index=False, sep="\t")
     test_df.to_csv("test_set.csv", index=False,sep="\t")
@@ -302,9 +366,20 @@ def main():
         [transforms.ToTensor(),
          transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
-    transform = transforms.Compose(
+    transformRGBA = transforms.Compose(
         [transforms.ToTensor(),
-         transforms.Normalize(0.5, 0.5)])
+         transforms.Normalize((0.5, 0.5, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5))])
+
+    transformL = transforms.Compose(
+        [transforms.ToTensor(),
+         transforms.Normalize((0.5,), (0.5,))])
+
+    if "--color" in sys.argv:
+        transform = transformRGB
+    elif "--rgba" in sys.argv:
+        transform = transformRGBA
+    else:
+        transform = transformL
 
     batch_size = 16
     if "--fragments" in sys.argv:
@@ -362,7 +437,13 @@ def main():
         imshow(torchvision.utils.make_grid(images))
 
         # Convolutional Neural Network
-        net = Net(input_channels=1, num_classes=3, image_size=(128,128))
+        if "--color" in sys.argv:
+            channels_num = 3
+        elif "--rgba" in sys.argv:
+            channels_num = 4
+        else:
+            channels_num = 1
+        net = Net(input_channels=channels_num, num_classes=2, image_size=(128,128))
         print(net)
         net = net.to(device)
         # Loss functions
@@ -384,6 +465,8 @@ def main():
             running_rec = 0
             correct = 0
             total = 0
+            correct_test = 0
+            total_test = 0
             loss_epoch = list()
             for i, data in enumerate(trainloader, 0):
                 net.train()
@@ -417,12 +500,16 @@ def main():
                 if i % 10 == 9:
                     print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 10:.3f}')
                     running_loss = 0.0
-                # Log original vs reconstructed images in Tensorboard per epoch
-                net.eval()
-                with torch.no_grad():
-                    images, labels = next(iter(trainloader))  # Full batch!
-                    images = images.to(device)
+            # Log original vs reconstructed images in Tensorboard per epoch
+            net.eval()
+            with torch.no_grad():
+                for batch, data in enumerate(testloader):
+                    inputs, labels = data[0].to(device), data[1].to(device)
+                    images = inputs
                     logits, recon = net(images)
+                    _, predicted = torch.max(logits, 1)
+                    correct_test += (predicted == labels).sum().item()
+                    total_test += labels.size(0)
                     batch_size = images.shape[0]  # e.g. 32
                     # Full batch: orig|recon pairs
                     orig_batch = images.cpu()
@@ -436,8 +523,19 @@ def main():
                     pred_labels = torch.argmax(logits, dim=1).cpu().numpy()
                     true_labels = labels.cpu()
                     # Add labels to grid (PIL overlay)
-                    grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
-                    grid_pil = Image.fromarray(grid_np)
+                    if "--rgba" in sys.argv:
+                        mode = 'RGBA'
+                        grid_pil = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu',
+                                                                                              torch.uint8).numpy()
+                    elif "--color" in sys.argv:
+                        mode = 'RGB'
+                        grid_pil = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu',
+                                                                                              torch.uint8).numpy()
+                    else:
+                        mode = 'L'
+                        grid_pil = grid[0].mul(255).add_(0.5).clamp_(0, 255).to('cpu',
+                                                                                torch.uint8).numpy()  # squeeze channel
+                    grid_pil = Image.fromarray(grid_pil, mode=mode)
                     draw = ImageDraw.Draw(grid_pil)
                     try:
                         font = ImageFont.truetype("arial", 20)
@@ -454,16 +552,18 @@ def main():
                     # Back to tensor
                     grid_with_labels = torch.from_numpy(np.array(grid_pil)).permute(2, 0, 1).float() / 255.0
                     # TensorBoard: full batch!
-                    writer.add_image(f"Epoch: {epoch}", grid_with_labels, i)
+                    writer.add_image(f"Testset over training epoch {epoch}", grid_with_labels, batch)
                     # SAVE to directory
-                    epoch_dir = f"recon_grids/"
+                    epoch_dir = f"recon_grids_test/"
                     os.makedirs(epoch_dir, exist_ok=True)
-                    save_path = f"{epoch_dir}/{epoch}_{i}.png"
+                    save_path = f"{epoch_dir}/{epoch}_{batch}.png"
                     grid_pil.save(save_path, "PNG", dpi=(150, 150))
 
             loss_list.append(sum(loss_epoch) / len(loss_epoch))
             acc = correct / total # Correct predictions in a training epoch
+            acc_test = correct_test / total_test
             writer.add_scalar("Accuracy/train", acc, epoch)
+            writer.add_scalar("Accuracy/test", acc_test, epoch)
 
         print('Finished Training')
         plt.plot(loss_list)
@@ -473,7 +573,7 @@ def main():
         plt.show()
 
         # Trained model saving:
-        PATH = './2vs3vs4_allImages_net.pth'
+        PATH = './2PvsA_testeval_net.pth'
         torch.save(net.state_dict(), PATH)
 
     # Showing some random testing images
@@ -483,8 +583,14 @@ def main():
     imshow(torchvision.utils.make_grid(images))
 
     # Loading trained model
-    net = Net(input_channels=1, num_classes=3, image_size=(128, 128))
-    PATH = './2vs3vs4_allImages_net.pth'
+    if "--color" in sys.argv:
+        channels_num = 3
+    elif "--rgba" in sys.argv:
+        channels_num = 4
+    else:
+        channels_num = 1
+    net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128))
+    PATH = './2PvsA_testeval_net.pth'
     net.load_state_dict(torch.load(PATH, weights_only=True))
     net = net.to(device)
 
@@ -504,7 +610,7 @@ def main():
     accuracy_list = list()
     # again no gradients needed
     with torch.no_grad():
-        for data in testloader:
+        for batch, data in enumerate(testloader):
             total_batch = 0
             correct_batch = 0
             images, labels = data[0].to(device), data[1].to(device)
@@ -520,6 +626,8 @@ def main():
                 if label == prediction:
                     correct_pred[idx_to_class[int(prediction)]] += 1
                 total_pred[idx_to_class[int(prediction)]] += 1
+            acc = correct / total # Correct predictions in a testing
+            writer.add_scalar("Accuracy/test_after_train", acc, batch+1)
     print(f'Accuracy of the network on the {total} test images: {100 * correct // total} %')
     fig = plt.figure()
     plt.plot(accuracy_list)
