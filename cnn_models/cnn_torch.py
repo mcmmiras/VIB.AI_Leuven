@@ -295,9 +295,12 @@ def generateImages(file, pdb_dir, classes, fragmented=False):
                     }
                     colors = [color_map.get(res_type, '#808080') for res_type in types_in_fragment]
                     # Now plot with per-point colors:
+                    """
                     ax.scatter(projected[:, 2], projected[:, 0],
                                c=colors, s=20, marker='.')
                     fig.savefig(projected_path, transparent=True)
+                    """
+
                     for i in range(len(projected) - 1):
                         ax.plot(projected[i:i + 2, 2], projected[i:i + 2, 0], color="black", linewidth=0.5)
                     fig.savefig(connected_path, transparent=True)
