@@ -345,7 +345,7 @@ def main():
     )
     val_df, test_df = train_test_split(
         temp_df,
-        test_size=0.3,
+        test_size=0.5,
         random_state=312,
         stratify=temp_df['orient']
     )
@@ -468,7 +468,7 @@ def main():
         log_images, log_labels = next(iter(trainloader))  # once, before training loop, to compare improvements over epochs of same images
         # EARLY STOPPING
         best_test_acc = 0
-        patience = 10  # Stop after 10 epochs without improvement
+        patience = 20  # Stop after 10 epochs without improvement
         patience_counter = 0
 
         for epoch in range(1000):  # loop over the dataset multiple times
@@ -478,8 +478,8 @@ def main():
             running_rec = 0
             correct = 0
             total = 0
-            correct_test = 0
-            total_test = 0
+            correct_val = 0
+            total_val = 0
             loss_epoch = list()
             for i, data in enumerate(trainloader, 0):
                 # get the inputs; data is a list of [inputs, labels]
@@ -520,8 +520,8 @@ def main():
                     images = inputs
                     logits, recon = net(images)
                     _, predicted = torch.max(logits, 1)
-                    correct_test += (predicted == labels).sum().item()
-                    total_test += labels.size(0)
+                    correct_val += (predicted == labels).sum().item()
+                    total_val += labels.size(0)
                     if batch_idx == 0:
                         batch_size = images.shape[0]  # e.g. 32
                         # Full batch: orig|recon pairs
@@ -563,12 +563,12 @@ def main():
 
             loss_list.append(sum(loss_epoch) / len(loss_epoch))
             acc = correct / total # Correct predictions in a training epoch
-            acc_test = correct_test / total_test
+            acc_val = correct_val / total_val
             writer.add_scalar("Accuracy/train", acc, epoch)
-            writer.add_scalar("Accuracy/test", acc_test, epoch)
+            writer.add_scalar("Accuracy/val", acc_val, epoch)
 
-            if acc_test > best_test_acc:
-                best_test_acc = acc_test
+            if acc_val > best_test_acc:
+                best_test_acc = acc_val
                 patience_counter = 0
                 PATH = './2PvsA_testeval_net.pth'
                 torch.save(net.state_dict(), PATH)
@@ -641,7 +641,7 @@ def main():
                     correct_pred[idx_to_class[int(prediction)]] += 1
                 total_pred[idx_to_class[int(prediction)]] += 1
             acc = correct / total # Correct predictions in a testing
-            writer.add_scalar("Accuracy/test_after_train", acc, batch+1)
+            writer.add_scalar("Accuracy/test", acc, batch+1)
     print(f'Accuracy of the network on the {total} test images: {100 * correct // total} %')
     fig = plt.figure()
     plt.plot(accuracy_list)
