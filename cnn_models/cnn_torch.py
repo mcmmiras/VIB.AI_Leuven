@@ -131,8 +131,6 @@ class CustomImageDataset(Dataset):
         # Load image as PIL Image ("L" for greyscale, "RGB" for color)
         if "--color" in sys.argv:
             image = Image.open(img_path).convert("RGB")  # ✅ compatible with ToTensor() in the transformer
-        elif "--rgba" in sys.argv:
-            image = Image.open(img_path).convert("RGBA")
         else:
             image = Image.open(img_path).convert("L")
         label = self.classes[self.img_labels.iloc[idx, 1]]
@@ -172,8 +170,6 @@ class FragmentedImageDataset(Dataset):
         # Load single image
         if "--color" in sys.argv:
             image = Image.open(img_path).convert("RGB")  # ✅ compatible with ToTensor() in the transformer
-        elif "--rgba" in sys.argv:
-            image = Image.open(img_path).convert("RGBA")
         else:
             image = Image.open(img_path).convert("L")
         label = torch.tensor(label, dtype=torch.long)
@@ -341,11 +337,17 @@ def main():
     rootdir = os.getcwd()
     df = pd.read_csv(source, sep="\t",header=0)
     # Split 80% train, 20% test, stratified by 'orient'
-    train_df, test_df = train_test_split(
+    train_df, temp_df = train_test_split(
         df,
         test_size=0.3,
         random_state=312,  # for reproducibility
         stratify=df['orient']  # ensures orient distribution is similar
+    )
+    val_df, test_df = train_test_split(
+        temp_df,
+        test_size=0.3,
+        random_state=312,
+        stratify=temp_df['orient']
     )
     class_list = sorted(df["orient"].unique())
     idx_to_class = {i: c for i, c in enumerate(class_list)}
@@ -357,6 +359,7 @@ def main():
     print(test_df['orient'].value_counts(normalize=True))
     # Saving train/test datasets
     train_df.to_csv("train_set.csv", index=False, sep="\t")
+    val_df.to_csv("val_set.csv", index=False, sep="\t")
     test_df.to_csv("test_set.csv", index=False,sep="\t")
 
     if "--embeddings" in sys.argv:
@@ -369,18 +372,12 @@ def main():
         [transforms.ToTensor(),
          transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
-    transformRGBA = transforms.Compose(
-        [transforms.ToTensor(),
-         transforms.Normalize((0.5, 0.5, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5))])
-
     transformL = transforms.Compose(
         [transforms.ToTensor(),
          transforms.Normalize((0.5,), (0.5,))])
 
     if "--color" in sys.argv:
         transform = transformRGB
-    elif "--rgba" in sys.argv:
-        transform = transformRGBA
     else:
         transform = transformL
 
@@ -388,14 +385,19 @@ def main():
     if "--fragments" in sys.argv:
         # Training
         trainset = FragmentedImageDataset(annotations_file="train_set.csv",
-                                      img_dir="/media/mari/Data/vib_leuven/ccn_tutorial/imgs/connected",
+                                      img_dir="/media/mari/Data/vib_leuven/ccn_tutorial/debug/imgs/connected",
                                       classes=class_to_idx,
                                       transform=transform)
 
         print("Classes:", class_to_idx)
+        # Validation:
+        valset = FragmentedImageDataset(annotations_file="val_set.csv",
+                                     img_dir="/media/mari/Data/vib_leuven/ccn_tutorial/debug/imgs/connected",
+                                     classes=class_to_idx,
+                                     transform=transform)
         # Testing
         testset = FragmentedImageDataset(annotations_file="test_set.csv",
-                                     img_dir="/media/mari/Data/vib_leuven/ccn_tutorial/imgs/connected",
+                                     img_dir="/media/mari/Data/vib_leuven/ccn_tutorial/debug/imgs/connected",
                                      classes=class_to_idx,
                                      transform=transform)
     else:
@@ -406,6 +408,11 @@ def main():
                                       transform=transform)
 
         print("Classes:", class_to_idx)
+        # Validation
+        valset = CustomImageDataset(annotations_file="val_set.csv",
+                                     img_dir="/media/mari/Data/vib_leuven/ccn_tutorial/imgs/connected",
+                                     classes=class_to_idx,
+                                     transform=transform)
         # Testing
         testset = CustomImageDataset(annotations_file="test_set.csv",
                                      img_dir="/media/mari/Data/vib_leuven/ccn_tutorial/imgs/connected",
@@ -413,6 +420,7 @@ def main():
                                      transform=transform)
 
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
+    valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2)
     testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
 
     print("=" * 50)
@@ -442,8 +450,6 @@ def main():
         # Convolutional Neural Network
         if "--color" in sys.argv:
             channels_num = 3
-        elif "--rgba" in sys.argv:
-            channels_num = 4
         else:
             channels_num = 1
         net = Net(input_channels=channels_num, num_classes=2, image_size=(128,128))
@@ -460,8 +466,12 @@ def main():
         loss_list = list()
 
         log_images, log_labels = next(iter(trainloader))  # once, before training loop, to compare improvements over epochs of same images
+        # EARLY STOPPING
+        best_test_acc = 0
+        patience = 10  # Stop after 10 epochs without improvement
+        patience_counter = 0
 
-        for epoch in range(20):  # loop over the dataset multiple times
+        for epoch in range(1000):  # loop over the dataset multiple times
             net.train()
             running_loss = 0.0
             running_cls = 0
@@ -472,7 +482,6 @@ def main():
             total_test = 0
             loss_epoch = list()
             for i, data in enumerate(trainloader, 0):
-                net.train()
                 # get the inputs; data is a list of [inputs, labels]
                 # Inputs and labels are sent to the GPU at every step
                 inputs, labels = data[0].to(device), data[1].to(device)
@@ -506,67 +515,71 @@ def main():
             # Log original vs reconstructed images in Tensorboard per epoch
             net.eval()
             with torch.no_grad():
-                for batch, data in enumerate(testloader):
+                for batch_idx, data in enumerate(valloader):
                     inputs, labels = data[0].to(device), data[1].to(device)
                     images = inputs
                     logits, recon = net(images)
                     _, predicted = torch.max(logits, 1)
                     correct_test += (predicted == labels).sum().item()
                     total_test += labels.size(0)
-                    batch_size = images.shape[0]  # e.g. 32
-                    # Full batch: orig|recon pairs
-                    orig_batch = images.cpu()
-                    recon_batch = recon.cpu()
-                    comparisons = torch.cat([orig_batch, recon_batch], dim=3)  # [32, 1, 128, 256]
-                    # Dynamic grid layout (auto-fit batch size)
-                    cols = int(np.ceil(np.sqrt(batch_size)))  # ~6x6 for batch=32
-                    cols = batch_size // cols
-                    grid = vutils.make_grid(comparisons, nrow=cols, normalize=True, scale_each=True)
-                    # Get ALL predictions
-                    pred_labels = torch.argmax(logits, dim=1).cpu().numpy()
-                    true_labels = labels.cpu()
-                    # Add labels to grid (PIL overlay)
-                    if "--rgba" in sys.argv:
-                        mode = 'RGBA'
-                        grid_pil = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu',
-                                                                                              torch.uint8).numpy()
-                    elif "--color" in sys.argv:
-                        mode = 'RGB'
-                        grid_pil = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu',
-                                                                                              torch.uint8).numpy()
-                    else:
-                        mode = 'L'
-                        grid_pil = grid[0].mul(255).add_(0.5).clamp_(0, 255).to('cpu',
-                                                                                torch.uint8).numpy()  # squeeze channel
-                    grid_pil = Image.fromarray(grid_pil, mode=mode)
-                    draw = ImageDraw.Draw(grid_pil)
-                    try:
-                        font = ImageFont.truetype("arial", 20)
-                    except:
-                        font = ImageFont.load_default()
-                    cell_w = grid_pil.width // cols
-                    cell_h = grid_pil.height // cols
-                    for j in range(batch_size):
-                        row, col = divmod(j, cols)
-                        x = col * cell_w + cell_w // 2 - 30
-                        y = row * cell_h + cell_h - 20
-                        label_text = f"T:{idx_to_class[int(true_labels[j])]} P:{idx_to_class[int(pred_labels[j])]}"
-                        draw.text((x, y), label_text, fill='black', font=font, stroke_width=0.1, stroke_fill='black')
-                    # Back to tensor
-                    grid_with_labels = torch.from_numpy(np.array(grid_pil)).permute(2, 0, 1).float() / 255.0
-                    # TensorBoard: full batch!
-                    writer.add_image(f"Testset over training epoch {epoch}", grid_with_labels, batch)
-                    # SAVE to directory
-                    epoch_dir = f"recon_grids_test/"
-                    os.makedirs(epoch_dir, exist_ok=True)
-                    save_path = f"{epoch_dir}/{epoch}_{batch}.png"
-                    grid_pil.save(save_path, "PNG", dpi=(150, 150))
+                    if batch_idx == 0:
+                        batch_size = images.shape[0]  # e.g. 32
+                        # Full batch: orig|recon pairs
+                        orig_batch = images.cpu()
+                        recon_batch = recon.cpu()
+                        comparisons = torch.cat([orig_batch, recon_batch], dim=3)  # [32, 1, 128, 256]
+                        # Dynamic grid layout (auto-fit batch size)
+                        cols = int(np.ceil(np.sqrt(batch_size)))  # ~6x6 for batch=32
+                        cols = batch_size // cols
+                        grid = vutils.make_grid(comparisons, nrow=cols, normalize=True, scale_each=True)
+                        # Get ALL predictions
+                        pred_labels = torch.argmax(logits, dim=1).cpu().numpy()
+                        true_labels = labels.cpu()
+                        # Add labels to grid (PIL overlay)
+                        grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
+                        grid_pil = Image.fromarray(grid_np)
+                        draw = ImageDraw.Draw(grid_pil)
+                        try:
+                            font = ImageFont.truetype("arial", 20)
+                        except:
+                            font = ImageFont.load_default()
+                        cell_w = grid_pil.width // cols
+                        cell_h = grid_pil.height // cols
+                        for j in range(batch_size):
+                            row, col = divmod(j, cols)
+                            x = col * cell_w + cell_w // 2 - 30
+                            y = row * cell_h + cell_h - 20
+                            label_text = f"T:{idx_to_class[int(true_labels[j])]} P:{idx_to_class[int(pred_labels[j])]}"
+                            draw.text((x, y), label_text, fill='black', font=font, stroke_width=0.1, stroke_fill='black')
+                        # Back to tensor
+                        grid_with_labels = torch.from_numpy(np.array(grid_pil)).permute(2, 0, 1).float() / 255.0
+                        # TensorBoard: full batch!
+                        writer.add_image(f"Epoch: {epoch}", grid_with_labels, epoch)
+                        # SAVE to directory
+                        epoch_dir = f"recon_grids_val/"
+                        os.makedirs(epoch_dir, exist_ok=True)
+                        save_path = f"{epoch_dir}/{epoch}.png"
+                        grid_pil.save(save_path, "PNG", dpi=(150, 150))
 
             loss_list.append(sum(loss_epoch) / len(loss_epoch))
             acc = correct / total # Correct predictions in a training epoch
             acc_test = correct_test / total_test
             writer.add_scalar("Accuracy/train", acc, epoch)
             writer.add_scalar("Accuracy/test", acc_test, epoch)
+
+            if acc_test > best_test_acc:
+                best_test_acc = acc_test
+                patience_counter = 0
+                PATH = './2PvsA_testeval_net.pth'
+                torch.save(net.state_dict(), PATH)
+                print(f"New best validation accuracy: {best_test_acc:.3f}")
+            else:
+                patience_counter += 1
+                print(f"No improvement. Patience: {patience_counter}/{patience}")
+
+            if patience_counter >= patience:
+                print(f"Early stopping at epoch {epoch + 1} (best validation acc: {best_test_acc:.3f})")
+                break  # EXIT THE LOOP
 
         print('Finished Training')
         plt.plot(loss_list)
@@ -588,8 +601,6 @@ def main():
     # Loading trained model
     if "--color" in sys.argv:
         channels_num = 3
-    elif "--rgba" in sys.argv:
-        channels_num = 4
     else:
         channels_num = 1
     net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128))
