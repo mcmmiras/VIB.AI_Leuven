@@ -554,7 +554,7 @@ def main():
             if loss_val < best_val_loss:
                 best_val_loss = loss_val
                 patience_counter = 0
-                PATH = './2PvsA_testeval_net.pth'
+                PATH = './2PvsA_decoder_net.pth'
                 torch.save(net.state_dict(), PATH)
                 print(f"New best validation loss: {best_val_loss:.3f}")
             else:
@@ -568,7 +568,7 @@ def main():
         print('Finished Decoder Training')
 
         # Trained model saving:
-        PATH = './2PvsA_testeval_net.pth'
+        PATH = './2PvsA_decoder_net.pth'
         torch.save(net.state_dict(), PATH)
 
     # Showing some random testing images
@@ -583,7 +583,7 @@ def main():
     else:
         channels_num = 1
     net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128), reconstruct=True)
-    PATH = './2PvsA_testeval_net.pth'
+    PATH = './2PvsA_decoder_net.pth'
     net.load_state_dict(torch.load(PATH, weights_only=True))
     net = net.to(device)
 
@@ -637,7 +637,6 @@ def main():
             grid_pil.save(save_path, "PNG", dpi=(150, 150))
 
     print(f"Finished Decoder Testing on {total} images.")
-    exit()
 
     print("Starting Classifier Training...")
     if "--train" in sys.argv:
@@ -769,7 +768,7 @@ def main():
             if loss_val < best_val_loss:
                 best_val_loss = loss_val
                 patience_counter = 0
-                PATH = './2PvsA_testeval_net.pth'
+                PATH = './2PvsA_classifier_net.pth'
                 torch.save(net.state_dict(), PATH)
                 print(f"New best validation loss: {best_val_loss:.3f}")
             else:
@@ -783,7 +782,7 @@ def main():
         print('Finished Classifier Training')
 
         # Trained model saving:
-        PATH = './2PvsA_testeval_net.pth'
+        PATH = './2PvsA_classifier_net.pth'
         torch.save(net.state_dict(), PATH)
 
         print("Starting Classifier Testing...")
@@ -799,7 +798,7 @@ def main():
         else:
             channels_num = 1
         net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128), reconstruct=False)
-        PATH = './2PvsA_testeval_net.pth'
+        PATH = './2PvsA_classifier_net.pth'
         net.load_state_dict(torch.load(PATH, weights_only=True))
         net = net.to(device)
 
