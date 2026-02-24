@@ -130,14 +130,21 @@ class CustomImageDataset(Dataset):
     def __len__(self):
         return len(self.img_labels)
     def __getitem__(self, idx):
-        img_path = os.path.join(self.img_dir, f"{self.img_labels.iloc[idx, 0].upper()}.png")
+        if "model_build" not in self.img_dir:
+            img_path = os.path.join(self.img_dir, f"{self.img_labels.iloc[idx, 0].upper()}.png")
+            label = self.classes[self.img_labels.iloc[idx, 1]]
+            label = torch.tensor(label, dtype=torch.long)  # ✅ convert to tensor
+        else:
+            for img_file in os.listdir(self.img_dir):
+                img_path = os.path.join(self.img_dir, img_file)
+                label = img_file.split("_")[0]
+                label = self.classes[label]
+                self.samples.append((img_path, label))
         # Load image as PIL Image ("L" for greyscale, "RGB" for color)
         if "--color" in sys.argv:
             image = Image.open(img_path).convert("RGB")  # ✅ compatible with ToTensor() in the transformer
         else:
             image = Image.open(img_path).convert("L")
-        label = self.classes[self.img_labels.iloc[idx, 1]]
-        label = torch.tensor(label, dtype=torch.long)  # ✅ convert to tensor
         if self.transform:
             image = self.transform(image)
         if self.target_transform:
@@ -156,15 +163,22 @@ class FragmentedImageDataset(Dataset):
         self.img_list = os.listdir(img_dir)
         # BUILD flattened list: each fragment = one dataset entry
         self.samples = []  # List of (img_path, label)
-        for idx in range(len(self.img_labels)):
-            base_name = self.img_labels.iloc[idx, 0].upper()
-            label_idx = self.img_labels.iloc[idx, 1]
-            label = self.classes[label_idx]
-            # Find ALL matching fragments
-            matching_imgs = [f for f in self.img_list if base_name in f]
-            # Add EACH fragment as separate sample with SAME label
-            for img_file in matching_imgs:
+        if "model_build" not in img_dir:
+            for idx in range(len(self.img_labels)):
+                base_name = self.img_labels.iloc[idx, 0].upper()
+                label_idx = self.img_labels.iloc[idx, 1]
+                label = self.classes[label_idx]
+                # Find ALL matching fragments
+                matching_imgs = [f for f in self.img_list if base_name in f]
+                # Add EACH fragment as separate sample with SAME label
+                for img_file in matching_imgs:
+                    img_path = os.path.join(img_dir, img_file)
+                    self.samples.append((img_path, label))
+        else:
+            for img_file in os.listdir(img_dir):
                 img_path = os.path.join(img_dir, img_file)
+                label = img_file.split("_")[0]
+                label = self.classes[label]
                 self.samples.append((img_path, label))
     def __len__(self):
         return len(self.samples)  # Total fragments across ALL annotations
@@ -340,30 +354,31 @@ def main():
     rootdir = os.getcwd()
     df = pd.read_csv(source, sep="\t",header=0)
     # Split 80% train, 20% test, stratified by 'orient'
-    train_df, temp_df = train_test_split(
-        df,
-        test_size=0.3,
-        random_state=312,  # for reproducibility
-        stratify=df['orient']  # ensures orient distribution is similar
-    )
-    val_df, test_df = train_test_split(
-        temp_df,
-        test_size=0.5,
-        random_state=312,
-        stratify=temp_df['orient']
-    )
-    class_list = sorted(df["orient"].unique())
-    idx_to_class = {i: c for i, c in enumerate(class_list)}
-    class_to_idx = {c: i for i, c in idx_to_class.items()}
-    # Check
-    print("Train set class distribution:")
-    print(train_df['orient'].value_counts(normalize=True))
-    print("\nTest set class distribution:")
-    print(test_df['orient'].value_counts(normalize=True))
-    # Saving train/test datasets
-    train_df.to_csv("train_set.csv", index=False, sep="\t")
-    val_df.to_csv("val_set.csv", index=False, sep="\t")
-    test_df.to_csv("test_set.csv", index=False,sep="\t")
+    if "train_set.csv" not in os.listdir(rootdir):
+        train_df, temp_df = train_test_split(
+            df,
+            test_size=0.3,
+            random_state=312,  # for reproducibility
+            stratify=df['orient']  # ensures orient distribution is similar
+        )
+        val_df, test_df = train_test_split(
+            temp_df,
+            test_size=0.5,
+            random_state=312,
+            stratify=temp_df['orient']
+        )
+        class_list = sorted(df["orient"].unique())
+        idx_to_class = {i: c for i, c in enumerate(class_list)}
+        class_to_idx = {c: i for i, c in idx_to_class.items()}
+        # Check
+        print("Train set class distribution:")
+        print(train_df['orient'].value_counts(normalize=True))
+        print("\nTest set class distribution:")
+        print(test_df['orient'].value_counts(normalize=True))
+        # Saving train/test datasets
+        train_df.to_csv("train_set.csv", index=False, sep="\t")
+        val_df.to_csv("val_set.csv", index=False, sep="\t")
+        test_df.to_csv("test_set.csv", index=False,sep="\t")
 
     if "--embeddings" in sys.argv:
         generateImages(file=source,
@@ -638,8 +653,127 @@ def main():
 
     print(f"Finished Decoder Testing on {total} images.")
 
+    print("Rebuilding training images with current best model...")
+    newimgs = f"model_build_embeddings_train/"
+    os.makedirs(newimgs, exist_ok=True)
+    newimgs = f"model_build_embeddings_val/"
+    os.makedirs(newimgs, exist_ok=True)
+    newimgs = f"model_build_embeddings_test/"
+    os.makedirs(newimgs, exist_ok=True)
+
+    with torch.no_grad():
+        total = 0
+        for batch, data in enumerate(trainloader):
+            images, labels = data[0].to(device), data[1].to(device)
+            total += len(images)
+            recon = net(images)
+            batch_size = images.shape[0]  # e.g. 32
+            # Full training batch:
+            recon_batch = recon.cpu()
+            true_labels = labels.cpu()
+            for recon, label in zip(recon_batch, true_labels):
+                # Dynamic grid layout (auto-fit batch size)
+                grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
+                # Add labels to grid (PIL overlay)
+                grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
+                grid_pil = Image.fromarray(grid_np)
+                # Back to tensor
+                # TensorBoard: full batch!
+                # SAVE to directory
+                recons_dir = f"model_build_embeddings_train/"
+                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
+                grid_pil.save(save_path, "PNG", dpi=(150, 150))
+                total+=1
+        total = 0
+        for batch, data in enumerate(valloader):
+            images, labels = data[0].to(device), data[1].to(device)
+            total += len(images)
+            recon = net(images)
+            batch_size = images.shape[0]  # e.g. 32
+            # Full training batch:
+            recon_batch = recon.cpu()
+            true_labels = labels.cpu()
+            for recon, label in zip(recon_batch, true_labels):
+                # Dynamic grid layout (auto-fit batch size)
+                grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
+                # Add labels to grid (PIL overlay)
+                grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
+                grid_pil = Image.fromarray(grid_np)
+                # Back to tensor
+                # TensorBoard: full batch!
+                # SAVE to directory
+                recons_dir = f"model_build_embeddings_val/"
+                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
+                grid_pil.save(save_path, "PNG", dpi=(150, 150))
+                total+=1
+        total = 0
+        for batch, data in enumerate(valloader):
+            images, labels = data[0].to(device), data[1].to(device)
+            total += len(images)
+            recon = net(images)
+            batch_size = images.shape[0]  # e.g. 32
+            # Full training batch:
+            recon_batch = recon.cpu()
+            true_labels = labels.cpu()
+            for recon, label in zip(recon_batch, true_labels):
+                # Dynamic grid layout (auto-fit batch size)
+                grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
+                # Add labels to grid (PIL overlay)
+                grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
+                grid_pil = Image.fromarray(grid_np)
+                # Back to tensor
+                # TensorBoard: full batch!
+                # SAVE to directory
+                recons_dir = f"model_build_embeddings_test/"
+                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
+                grid_pil.save(save_path, "PNG", dpi=(150, 150))
+                total += 1
+
+
     print("Starting Classifier Training...")
+
     if "--train" in sys.argv:
+        if "--fragments" in sys.argv:
+            # Training
+            trainset = FragmentedImageDataset(annotations_file="train_set.csv",
+                                              img_dir = "model_build_embeddings_train",
+                                              classes=class_to_idx,
+                                              transform=transform)
+
+            print("Classes:", class_to_idx)
+            # Validation:
+            valset = FragmentedImageDataset(annotations_file="val_set.csv",
+                                            img_dir="model_build_embeddings_val",
+                                            classes=class_to_idx,
+                                            transform=transform)
+            # Testing
+            testset = FragmentedImageDataset(annotations_file="test_set.csv",
+                                             img_dir="model_build_embeddings_test",
+                                             classes=class_to_idx,
+                                             transform=transform)
+        else:
+            # Training
+            trainset = CustomImageDataset(annotations_file="train_set.csv",
+                                          img_dir="model_build_embeddings_train",
+                                          classes=class_to_idx,
+                                          transform=transform)
+
+            print("Classes:", class_to_idx)
+            # Validation
+            valset = CustomImageDataset(annotations_file="val_set.csv",
+                                        img_dir="model_build_embeddings_val",
+                                        classes=class_to_idx,
+                                        transform=transform)
+            # Testing
+            testset = CustomImageDataset(annotations_file="test_set.csv",
+                                         img_dir="model_build_embeddings_test",
+                                         classes=class_to_idx,
+                                         transform=transform)
+
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
+        valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
+
         # Showing some random training images
         dataiter = iter(trainloader)
         images, labels = next(dataiter)
