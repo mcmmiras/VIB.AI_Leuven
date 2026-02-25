@@ -357,7 +357,7 @@ def main():
     rootdir = os.getcwd()
     df = pd.read_csv(source, sep="\t",header=0)
     # Split 80% train, 20% test, stratified by 'orient'
-    if "train_set.csv" not in os.listdir(rootdir):
+    if f"{name}_train_set.csv" not in os.listdir(rootdir):
         train_df, temp_df = train_test_split(
             df,
             test_size=0.3,
