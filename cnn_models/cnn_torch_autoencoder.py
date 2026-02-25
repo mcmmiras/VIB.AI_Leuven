@@ -109,10 +109,12 @@ class Net(nn.Module): # Currently an autoencoder
         # Classification task (CrossEntropyLoss will be calculated)
         if self.reconstruct:
             # Reconstruction task (MSELoss will be calculated)
-            values = self.decoder(latent)
+            images = self.decoder(latent)
+            logits = self.fc3(latent)  # Logits
         else:
-            values = self.fc3(latent)  # Logits
-        return values
+            images = self.decoder(latent)
+            logits = self.fc3(latent)  # Logits
+        return images, logits
 
     def _compute_linear_input(self, image_size, input_channels):
         x = torch.zeros(1, input_channels, image_size[0], image_size[1])
