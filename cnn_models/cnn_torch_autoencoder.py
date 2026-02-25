@@ -639,7 +639,6 @@ def main():
     with torch.no_grad():
         for batch, data in enumerate(testloader):
             images, labels = data[0].to(device), data[1].to(device)
-            total += len(images)
             outputs, recon = net(images)
             _, predictions = torch.max(outputs, 1)
             total += labels.size(0)
@@ -656,9 +655,8 @@ def main():
             # Full batch: orig|recon pairs
             orig_batch = images.cpu()
             recon_batch = recon.cpu()
-            true_labels = labels.cpu()
-            pred_labels = predictions.cpu()
-            print("These true labels", np.array(true_labels))
+            true_labels = labels.cpu().numpy()
+            pred_labels = predictions.cpu().numpy()
             comparisons = torch.cat([orig_batch, recon_batch], dim=3)  # [32, 1, 128, 256]
             # Dynamic grid layout (auto-fit batch size)
             cols = int(np.ceil(np.sqrt(batch_size)))  # ~6x6 for batch=32
@@ -679,7 +677,7 @@ def main():
                 row, col = divmod(j, cols)
                 x = col * cell_w + cell_w // 2 - 30
                 y = row * cell_h + cell_h - 20
-                label_text = f"T:{idx_to_class[int(np.array(true_labels)[j])]} P:{idx_to_class[int(np.array(pred_labels)[j])]}"
+                label_text = f"T:{idx_to_class[int(true_labels[j])]} P:{idx_to_class[int(pred_labels[j])]}"
                 draw.text((x, y), label_text, fill='black', font=font, stroke_width=0.1, stroke_fill='black')
             # Back to tensor
             grid_with_labels = torch.from_numpy(np.array(grid_pil)).permute(2, 0, 1).float() / 255.0
