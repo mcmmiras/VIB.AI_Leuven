@@ -56,6 +56,7 @@ class Net(nn.Module): # Currently an autoencoder
         # Encoder layers
         super(Net, self).__init__()
         # Convolution + pooling layers
+        self.dropout = nn.Dropout(0.5)
         self.conv1 = nn.Conv2d(input_channels, 16, 4, stride=2, padding=1)
         #self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(16, 32, 4, stride=2, padding=1)
@@ -87,6 +88,7 @@ class Net(nn.Module): # Currently an autoencoder
         x = F.relu(self.conv3(x))
         x = torch.flatten(x, 1)  # flatten all dimensions except batch
         x = F.relu(self.fc1(x))
+        x = self.dropout(x) # Drop neurons
         x = F.relu(self.fc2(x)) # Latent vector
         return x
 
