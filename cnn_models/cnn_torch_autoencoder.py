@@ -575,7 +575,7 @@ def main():
                             font = ImageFont.load_default()
                         cell_w = grid_pil.width // cols
                         cell_h = grid_pil.height // cols
-                        row, col = divmod(j, cols)
+                        row, col = 1,1
                         x = col * cell_w + cell_w // 2 - 30
                         y = row * cell_h + cell_h - 20
                         label_text = f"T:{idx_to_class[int(true_labels)]} P:{idx_to_class[int(pred_labels)]}"
