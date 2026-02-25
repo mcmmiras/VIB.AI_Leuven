@@ -642,7 +642,6 @@ def main():
             total += len(images)
             outputs, recon = net(images)
             _, predictions = torch.max(outputs, 1)
-            print("These predicted", np.array(predictions))
             total += labels.size(0)
             correct += (predictions == labels).sum().item()
             total_batch = labels.size(0)
@@ -658,6 +657,7 @@ def main():
             orig_batch = images.cpu()
             recon_batch = recon.cpu()
             true_labels = labels.cpu()
+            pred_labels = predictions.cpu()
             print("These true labels", np.array(true_labels))
             comparisons = torch.cat([orig_batch, recon_batch], dim=3)  # [32, 1, 128, 256]
             # Dynamic grid layout (auto-fit batch size)
