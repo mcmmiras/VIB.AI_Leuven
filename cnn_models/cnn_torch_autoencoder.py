@@ -494,7 +494,7 @@ def main():
         patience = 10  # Stop after 10 epochs without improvement
         patience_counter = 0
 
-        for epoch in range(10):  # loop over the dataset multiple times
+        for epoch in range(200):  # loop over the dataset multiple times
             global_step += 1
             net.train()
             running_loss = 0.0
