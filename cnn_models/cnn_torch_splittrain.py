@@ -587,9 +587,6 @@ def main():
 
         print('Finished Decoder Training')
 
-        # Trained model saving:
-        PATH = f'./{name}_decoder_net.pth'
-        torch.save(net.state_dict(), PATH)
 
     # Showing some random testing images
     print("Starting Decoder Testing...")
@@ -919,10 +916,6 @@ def main():
                 break  # EXIT THE LOOP
 
         print('Finished Classifier Training')
-
-        # Trained model saving:
-        PATH = f'./{name}_classifier_net.pth'
-        torch.save(net.state_dict(), PATH)
 
         print("Starting Classifier Testing...")
         # Showing some random testing images
