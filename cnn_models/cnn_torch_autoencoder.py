@@ -543,7 +543,7 @@ def main():
                     loss_cls_val = ce(logits, labels)
                     loss_rec_val = mse(recon, inputs)
                     loss = loss_cls_val + 0.1 * loss_rec_val
-                    loss_val_epoch.append(loss_rec_val.item())
+                    loss_val_epoch.append(loss_rec_val.item()) # Using reconstruction loss as parameter to guide early-stopping
                     # Predictions on validation batches
                     _, predicted = torch.max(logits, 1)
                     correct_val = (predicted == labels).sum().item()
