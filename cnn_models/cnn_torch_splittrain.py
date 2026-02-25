@@ -738,37 +738,37 @@ def main():
     if "--train" in sys.argv:
         if "--fragments" in sys.argv:
             # Training
-            trainset = FragmentedImageDataset(annotations_file="train_set.csv",
+            trainset = FragmentedImageDataset(annotations_file=f"{name}_train_set.csv",
                                               img_dir = f"{name}_build_emb_train",
                                               classes=class_to_idx,
                                               transform=transform)
 
             print("Classes:", class_to_idx)
             # Validation:
-            valset = FragmentedImageDataset(annotations_file="val_set.csv",
+            valset = FragmentedImageDataset(annotations_file=f"{name}_val_set.csv",
                                             img_dir=f"{name}_build_emb_val",
                                             classes=class_to_idx,
                                             transform=transform)
             # Testing
-            testset = FragmentedImageDataset(annotations_file="test_set.csv",
+            testset = FragmentedImageDataset(annotations_file=f"{name}_test_set.csv",
                                              img_dir=f"{name}_build_emb_test",
                                              classes=class_to_idx,
                                              transform=transform)
         else:
             # Training
-            trainset = CustomImageDataset(annotations_file="train_set.csv",
+            trainset = CustomImageDataset(annotations_file=f"{name}_train_set.csv",
                                           img_dir=f"{name}_build_emb_train",
                                           classes=class_to_idx,
                                           transform=transform)
 
             print("Classes:", class_to_idx)
             # Validation
-            valset = CustomImageDataset(annotations_file="val_set.csv",
+            valset = CustomImageDataset(annotations_file=f"{name}_val_set.csv",
                                         img_dir=f"{name}_build_emb_val",
                                         classes=class_to_idx,
                                         transform=transform)
             # Testing
-            testset = CustomImageDataset(annotations_file="test_set.csv",
+            testset = CustomImageDataset(annotations_file=f"{name}_test_set.csv",
                                          img_dir=f"{name}_build_emb_test",
                                          classes=class_to_idx,
                                          transform=transform)
