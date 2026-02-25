@@ -983,4 +983,8 @@ def main():
 
 if __name__ == "__main__":
     main()
-    os.rename('log', f'results_{name}_model.txt')
+    for file in os.listdir(os.getcwd()):
+        if ",19" in file:
+            os.rename(file, f'results_{name}_model.txt')
+        elif "log" in file:
+            os.remove(file)
