@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
-writer = SummaryWriter(log_dir="runs/2PvsA_testeval_classifier")
 import torchvision.utils as vutils
 from torch.utils.data import Dataset, DataLoader
 import torchvision
@@ -20,7 +19,11 @@ from Bio.PDB import PDBParser, MMCIFParser, DSSP
 from collections import defaultdict, Counter
 parser = PDBParser(QUIET=True)
 
-errors = open("errors.txt","w")
+# Global values
+source = sys.argv[1]
+name = sys.argv[2]
+errors = open(f"{name}_errors.txt", "w")
+writer = SummaryWriter(log_dir=f"{name}_run")
 
 residue_types = {
     'ALA': 'hydrophobic',
@@ -197,13 +200,14 @@ class FragmentedImageDataset(Dataset):
         return image, label
 
 def generateImages(file, pdb_dir, classes, fragmented=False):
+    global name
     if "--fragments" in sys.argv:
         fragmented = True
     data = pd.read_csv(file, header=0, sep="\t")
-    if "imgs" not in os.listdir():
-        os.mkdir("imgs")
-        os.mkdir("imgs/projected")
-        os.mkdir("imgs/connected")
+    if f"{name}_imgs" not in os.listdir():
+        os.mkdir(f"{name}_imgs")
+        os.mkdir(f"{name}_imgs/projected")
+        os.mkdir(f"{name}_imgs/connected")
     for idx in data.index:
         code = data.iloc[idx, 0].upper()
         cc_chains = data.at[idx,"CC_chains"].split(",")
@@ -268,8 +272,8 @@ def generateImages(file, pdb_dir, classes, fragmented=False):
                                       (projected_str[counter][0] + window) >= p[0] >= projected_str[counter][0]])
                 counter += len(projected)
                 if len(projected) >= 7 * int(classes[label]):
-                    projected_path = f"imgs/projected/{code}_{counter}.png"
-                    connected_path = f"imgs/connected/{code}_{counter}.png"
+                    projected_path = f"{name}_imgs/projected/{code}_{counter}.png"
+                    connected_path = f"{name}_imgs/connected/{code}_{counter}.png"
                     # center 12.8 Å window on fragment
                     x_center = projected[:, 0].mean()
                     y_center = projected[:, 1].mean()
@@ -321,8 +325,8 @@ def generateImages(file, pdb_dir, classes, fragmented=False):
         else:
             projected = np.array([p for p in projected_str if 6 >= p[0] >= -6])
             # Image paths:
-            projected_path = f"imgs/projected/{code}.png"
-            connected_path = f"imgs/connected/{code}.png"
+            projected_path = f"{name}_imgs/projected/{code}.png"
+            connected_path = f"{name}_imgs/connected/{code}.png"
             fig = plt.figure(figsize=(1.28, 1.28))
             ax = fig.add_subplot(111)
             ax.set_aspect("equal")
@@ -350,7 +354,6 @@ def main():
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print("Device:",device)
     classes = defaultdict(dict)
-    source = sys.argv[1]
     rootdir = os.getcwd()
     df = pd.read_csv(source, sep="\t",header=0)
     # Split 80% train, 20% test, stratified by 'orient'
@@ -376,9 +379,9 @@ def main():
         print("\nTest set class distribution:")
         print(test_df['orient'].value_counts(normalize=True))
         # Saving train/test datasets
-        train_df.to_csv("train_set.csv", index=False, sep="\t")
-        val_df.to_csv("val_set.csv", index=False, sep="\t")
-        test_df.to_csv("test_set.csv", index=False,sep="\t")
+        train_df.to_csv(f"{name}_train_set.csv", index=False, sep="\t")
+        val_df.to_csv(f"{name}_val_set.csv", index=False, sep="\t")
+        test_df.to_csv(f"{name}_test_set.csv", index=False,sep="\t")
 
     if "--embeddings" in sys.argv:
         generateImages(file=source,
@@ -402,38 +405,38 @@ def main():
     batch_size = 16
     if "--fragments" in sys.argv:
         # Training
-        trainset = FragmentedImageDataset(annotations_file="train_set.csv",
-                                      img_dir="/media/mari/Data/vib_leuven/ccn_tutorial/imgs_2PvsA_1000L_nonodes/connected",
+        trainset = FragmentedImageDataset(annotations_file=f"{name}_train_set.csv",
+                                      img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
                                       classes=class_to_idx,
                                       transform=transform)
 
         print("Classes:", class_to_idx)
         # Validation:
-        valset = FragmentedImageDataset(annotations_file="val_set.csv",
-                                     img_dir="/media/mari/Data/vib_leuven/ccn_tutorial/imgs_2PvsA_1000L_nonodes/connected",
+        valset = FragmentedImageDataset(annotations_file=f"{name}_val_set.csv",
+                                     img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
                                      classes=class_to_idx,
                                      transform=transform)
         # Testing
-        testset = FragmentedImageDataset(annotations_file="test_set.csv",
-                                     img_dir="/media/mari/Data/vib_leuven/ccn_tutorial/imgs_2PvsA_1000L_nonodes/connected",
+        testset = FragmentedImageDataset(annotations_file=f"{name}_test_set.csv",
+                                     img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
                                      classes=class_to_idx,
                                      transform=transform)
     else:
         # Training
-        trainset = CustomImageDataset(annotations_file="train_set.csv",
-                                      img_dir="/media/mari/Data/vib_leuven/ccn_tutorial/imgs_2PvsA_1000L_nonodes/connected",
+        trainset = CustomImageDataset(annotations_file=f"{name}_train_set.csv",
+                                      img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
                                       classes=class_to_idx,
                                       transform=transform)
 
         print("Classes:", class_to_idx)
         # Validation
-        valset = CustomImageDataset(annotations_file="val_set.csv",
-                                     img_dir="/media/mari/Data/vib_leuven/ccn_tutorial/imgs_2PvsA_1000L_nonodes/connected",
+        valset = CustomImageDataset(annotations_file=f"{name}_val_set.csv",
+                                     img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
                                      classes=class_to_idx,
                                      transform=transform)
         # Testing
-        testset = CustomImageDataset(annotations_file="test_set.csv",
-                                     img_dir="/media/mari/Data/vib_leuven/ccn_tutorial/imgs_2PvsA_1000L_nonodes/connected",
+        testset = CustomImageDataset(annotations_file=f"{name}_test_set.csv",
+                                     img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
                                      classes=class_to_idx,
                                      transform=transform)
 
@@ -486,7 +489,7 @@ def main():
 
         # EARLY STOPPING BY LOSS
         best_val_loss = 1
-        patience = 10  # Stop after 10 epochs without improvement
+        patience = 15  # Stop after 10 epochs without improvement
         patience_counter = 0
 
         for epoch in range(100):  # loop over the dataset multiple times
@@ -509,7 +512,7 @@ def main():
                 # Statistics
                 running_loss += loss.item()
                 # ---- TensorBoard scalar logging ----
-                writer.add_scalar("Loss/train_reconstruction", loss.item(), global_step)
+                writer.add_scalar("Reconstruction/Loss_train", loss.item(), global_step)
                 global_step += 1
                 # Print loss after every 10 mini-batches
                 if i % 10 == 9:
@@ -525,7 +528,7 @@ def main():
                     recon = net(images)
                     loss_rec_val = mse(recon, inputs)
                     loss_val_epoch.append(loss_rec_val.item())
-                    writer.add_scalar("Loss/val_reconstruction", loss_rec_val.item(), global_step)
+                    writer.add_scalar("Reconstruction/Loss_val", loss_rec_val.item(), global_step)
                     if batch_idx == 0:
                         batch_size = images.shape[0]  # e.g. 32
                         # Full batch: orig|recon pairs
@@ -559,7 +562,7 @@ def main():
                         # TensorBoard: full batch!
                         writer.add_image(f"Epoch: {epoch}", grid_with_labels, epoch)
                         # SAVE to directory
-                        epoch_dir = f"recon_grids_val/"
+                        epoch_dir = f"{name}_recon_grids_val/"
                         os.makedirs(epoch_dir, exist_ok=True)
                         save_path = f"{epoch_dir}/{epoch}.png"
                         grid_pil.save(save_path, "PNG", dpi=(150, 150))
@@ -569,7 +572,7 @@ def main():
             if loss_val < best_val_loss:
                 best_val_loss = loss_val
                 patience_counter = 0
-                PATH = './2PvsA_decoder_net.pth'
+                PATH = f'./{name}_decoder_net.pth'
                 torch.save(net.state_dict(), PATH)
                 print(f"New best validation loss: {best_val_loss:.3f}")
             else:
@@ -583,7 +586,7 @@ def main():
         print('Finished Decoder Training')
 
         # Trained model saving:
-        PATH = './2PvsA_decoder_net.pth'
+        PATH = f'./{name}_decoder_net.pth'
         torch.save(net.state_dict(), PATH)
 
     # Showing some random testing images
@@ -598,7 +601,7 @@ def main():
     else:
         channels_num = 1
     net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128), reconstruct=True)
-    PATH = './2PvsA_decoder_net.pth'
+    PATH = f'./{name}_decoder_net.pth'
     net.load_state_dict(torch.load(PATH, weights_only=True))
     net = net.to(device)
 
@@ -646,7 +649,7 @@ def main():
             # TensorBoard: full batch!
             writer.add_image(f"Batch: {batch}", grid_with_labels, batch)
             # SAVE to directory
-            batch_dir = f"recon_grids_test/"
+            batch_dir = f"{name}_recon_grids_test/"
             os.makedirs(batch_dir, exist_ok=True)
             save_path = f"{batch_dir}/{batch}.png"
             grid_pil.save(save_path, "PNG", dpi=(150, 150))
@@ -680,7 +683,7 @@ def main():
                 # Back to tensor
                 # TensorBoard: full batch!
                 # SAVE to directory
-                recons_dir = f"model_build_embeddings_train/"
+                recons_dir = f"{name}_build_emb_train/"
                 save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
                 grid_pil.save(save_path, "PNG", dpi=(150, 150))
                 total+=1
@@ -702,7 +705,7 @@ def main():
                 # Back to tensor
                 # TensorBoard: full batch!
                 # SAVE to directory
-                recons_dir = f"model_build_embeddings_val/"
+                recons_dir = f"{name}_build_emb_val/"
                 save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
                 grid_pil.save(save_path, "PNG", dpi=(150, 150))
                 total+=1
@@ -724,7 +727,7 @@ def main():
                 # Back to tensor
                 # TensorBoard: full batch!
                 # SAVE to directory
-                recons_dir = f"model_build_embeddings_test/"
+                recons_dir = f"{name}_build_emb_test/"
                 save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
                 grid_pil.save(save_path, "PNG", dpi=(150, 150))
                 total += 1
@@ -831,11 +834,11 @@ def main():
                 correct += (predicted == labels).sum().item()
                 total += labels.size(0)
                 # ---- TensorBoard scalar logging ----
-                writer.add_scalar("Loss/train_classification", loss.item(), global_step)
+                writer.add_scalar("Classification/Loss_train", loss.item(), global_step)
                 global_step += 1
                 # Print loss after every 10 mini-batches
                 if i % 10 == 9:
-                    print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 10:.3f}')
+                    print(f'[{epoch + 1}, {i + 1:5d}] tail lloss: {running_loss / 10:.3f}')
                     running_loss = 0.0
             # Log original vs reconstructed images in Tensorboard per epoch
             net.eval()
@@ -848,7 +851,7 @@ def main():
                     _, predicted = torch.max(logits, 1)
                     loss_cls_val = ce(logits, labels)
                     loss_val_epoch.append(loss_cls_val.item())
-                    writer.add_scalar("Loss/train_classification", loss_cls_val.item(), global_step)
+                    writer.add_scalar("Classification/Loss_val", loss_cls_val.item(), global_step)
                     correct_val += (predicted == labels).sum().item()
                     total_val += labels.size(0)
                     if batch_idx == 0:
@@ -896,13 +899,13 @@ def main():
             loss_list.append(sum(loss_epoch) / len(loss_epoch))
             acc = correct / total  # Correct predictions in a training epoch
             acc_val = correct_val / total_val
-            writer.add_scalar("Accuracy/train_classification", acc, epoch)
-            writer.add_scalar("Accuracy/val_classification", acc_val, epoch)
+            writer.add_scalar("Classification/Accuracy_train", acc, epoch)
+            writer.add_scalar("Classification/Accuracy_val", acc_val, epoch)
             loss_val = np.mean(loss_val_epoch)
             if loss_val < best_val_loss:
                 best_val_loss = loss_val
                 patience_counter = 0
-                PATH = './2PvsA_classifier_net.pth'
+                PATH = f'./{name}_classifier_net.pth'
                 torch.save(net.state_dict(), PATH)
                 print(f"New best validation loss: {best_val_loss:.3f}")
             else:
@@ -916,7 +919,7 @@ def main():
         print('Finished Classifier Training')
 
         # Trained model saving:
-        PATH = './2PvsA_classifier_net.pth'
+        PATH = f'./{name}_classifier_net.pth'
         torch.save(net.state_dict(), PATH)
 
         print("Starting Classifier Testing...")
@@ -967,7 +970,7 @@ def main():
                         correct_pred[idx_to_class[int(prediction)]] += 1
                     total_pred[idx_to_class[int(prediction)]] += 1
                 acc = correct_batch / total_batch  # Correct predictions in a testing batch
-                writer.add_scalar("Accuracy/test_classification", acc, batch + 1)
+                writer.add_scalar("Classification/Accuracy_test", acc, batch + 1)
         print(f'Accuracy of the network on the {total} test images: {100 * correct // total} %')
         # Accuracy for each class
         for classname, correct_count in correct_pred.items():
