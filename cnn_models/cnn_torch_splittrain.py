@@ -935,7 +935,7 @@ def main():
         else:
             channels_num = 1
         net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128), reconstruct=False)
-        PATH = './2PvsA_classifier_net.pth'
+        PATH = f'./{name}_classifier_net.pth'
         net.load_state_dict(torch.load(PATH, weights_only=True))
         net = net.to(device)
 
