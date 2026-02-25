@@ -491,10 +491,10 @@ def main():
 
         # EARLY STOPPING BY LOSS
         best_val_loss = 1
-        patience = 15  # Stop after 10 epochs without improvement
+        patience = 10  # Stop after 10 epochs without improvement
         patience_counter = 0
 
-        for epoch in range(100):  # loop over the dataset multiple times
+        for epoch in range(200):  # loop over the dataset multiple times
             global_step += 1
             net.train()
             running_loss = 0.0
@@ -621,7 +621,7 @@ def main():
     else:
         channels_num = 1
     net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128), reconstruct=True)
-    PATH = f'./{name}_decoder_net.pth'
+    PATH = f'./{name}_autoencoder_net.pth'
     net.load_state_dict(torch.load(PATH, weights_only=True))
     net = net.to(device)
 
