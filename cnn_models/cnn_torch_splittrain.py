@@ -562,7 +562,7 @@ def main():
                         # TensorBoard: full batch!
                         writer.add_image(f"Epoch: {epoch}", grid_with_labels, epoch)
                         # SAVE to directory
-                        epoch_dir = f"{name}_recon_grids_val/"
+                        epoch_dir = f"{name}_recon_grids_val"
                         os.makedirs(epoch_dir, exist_ok=True)
                         save_path = f"{epoch_dir}/{epoch}.png"
                         grid_pil.save(save_path, "PNG", dpi=(150, 150))
@@ -649,7 +649,7 @@ def main():
             # TensorBoard: full batch!
             writer.add_image(f"Batch: {batch}", grid_with_labels, batch)
             # SAVE to directory
-            batch_dir = f"{name}_recon_grids_test/"
+            batch_dir = f"{name}_recon_grids_test"
             os.makedirs(batch_dir, exist_ok=True)
             save_path = f"{batch_dir}/{batch}.png"
             grid_pil.save(save_path, "PNG", dpi=(150, 150))
@@ -657,11 +657,11 @@ def main():
     print(f"Finished Decoder Testing on {total} images.")
 
     print("Rebuilding training images with current best model...")
-    newimgs = f"model_build_embeddings_train/"
+    newimgs = f"{name}_build_emb_train"
     os.makedirs(newimgs, exist_ok=True)
-    newimgs = f"model_build_embeddings_val/"
+    newimgs = f"{name}_build_emb_val"
     os.makedirs(newimgs, exist_ok=True)
-    newimgs = f"model_build_embeddings_test/"
+    newimgs = f"{name}_build_emb_test"
     os.makedirs(newimgs, exist_ok=True)
 
     with torch.no_grad():
@@ -683,7 +683,7 @@ def main():
                 # Back to tensor
                 # TensorBoard: full batch!
                 # SAVE to directory
-                recons_dir = f"{name}_build_emb_train/"
+                recons_dir = f"{name}_build_emb_train"
                 save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
                 grid_pil.save(save_path, "PNG", dpi=(150, 150))
                 total+=1
@@ -705,7 +705,7 @@ def main():
                 # Back to tensor
                 # TensorBoard: full batch!
                 # SAVE to directory
-                recons_dir = f"{name}_build_emb_val/"
+                recons_dir = f"{name}_build_emb_val"
                 save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
                 grid_pil.save(save_path, "PNG", dpi=(150, 150))
                 total+=1
@@ -727,7 +727,7 @@ def main():
                 # Back to tensor
                 # TensorBoard: full batch!
                 # SAVE to directory
-                recons_dir = f"{name}_build_emb_test/"
+                recons_dir = f"{name}_build_emb_test"
                 save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
                 grid_pil.save(save_path, "PNG", dpi=(150, 150))
                 total += 1
@@ -739,37 +739,37 @@ def main():
         if "--fragments" in sys.argv:
             # Training
             trainset = FragmentedImageDataset(annotations_file="train_set.csv",
-                                              img_dir = "model_build_embeddings_train",
+                                              img_dir = f"{name}_build_emb_train",
                                               classes=class_to_idx,
                                               transform=transform)
 
             print("Classes:", class_to_idx)
             # Validation:
             valset = FragmentedImageDataset(annotations_file="val_set.csv",
-                                            img_dir="model_build_embeddings_val",
+                                            img_dir=f"{name}_build_emb_val",
                                             classes=class_to_idx,
                                             transform=transform)
             # Testing
             testset = FragmentedImageDataset(annotations_file="test_set.csv",
-                                             img_dir="model_build_embeddings_test",
+                                             img_dir=f"{name}_build_emb_test",
                                              classes=class_to_idx,
                                              transform=transform)
         else:
             # Training
             trainset = CustomImageDataset(annotations_file="train_set.csv",
-                                          img_dir="model_build_embeddings_train",
+                                          img_dir=f"{name}_build_emb_train",
                                           classes=class_to_idx,
                                           transform=transform)
 
             print("Classes:", class_to_idx)
             # Validation
             valset = CustomImageDataset(annotations_file="val_set.csv",
-                                        img_dir="model_build_embeddings_val",
+                                        img_dir=f"{name}_build_emb_val",
                                         classes=class_to_idx,
                                         transform=transform)
             # Testing
             testset = CustomImageDataset(annotations_file="test_set.csv",
-                                         img_dir="model_build_embeddings_test",
+                                         img_dir=f"{name}_build_emb_test",
                                          classes=class_to_idx,
                                          transform=transform)
 
