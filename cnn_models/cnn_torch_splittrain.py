@@ -983,3 +983,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    os.rename('log', f'results_{name}_model.txt')
