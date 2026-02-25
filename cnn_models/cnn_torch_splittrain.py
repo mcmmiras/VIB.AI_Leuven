@@ -133,7 +133,7 @@ class CustomImageDataset(Dataset):
     def __len__(self):
         return len(self.img_labels)
     def __getitem__(self, idx):
-        if "model_build" not in self.img_dir:
+        if "build" not in self.img_dir:
             img_path = os.path.join(self.img_dir, f"{self.img_labels.iloc[idx, 0].upper()}.png")
             label = self.classes[self.img_labels.iloc[idx, 1]]
             label = torch.tensor(label, dtype=torch.long)  # ✅ convert to tensor
@@ -166,7 +166,7 @@ class FragmentedImageDataset(Dataset):
         self.img_list = os.listdir(img_dir)
         # BUILD flattened list: each fragment = one dataset entry
         self.samples = []  # List of (img_path, label)
-        if "model_build" not in img_dir:
+        if "build" not in img_dir:
             for idx in range(len(self.img_labels)):
                 base_name = self.img_labels.iloc[idx, 0].upper()
                 label_idx = self.img_labels.iloc[idx, 1]
