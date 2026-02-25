@@ -494,7 +494,7 @@ def main():
         patience = 10  # Stop after 10 epochs without improvement
         patience_counter = 0
 
-        for epoch in range(200):  # loop over the dataset multiple times
+        for epoch in range(10):  # loop over the dataset multiple times
             global_step += 1
             net.train()
             running_loss = 0.0
@@ -563,8 +563,8 @@ def main():
                         cols = batch_size // cols
                         grid = vutils.make_grid(comparisons, nrow=cols, normalize=True, scale_each=True)
                         # Get ALL predictions
-                        pred_labels = torch.argmax(logits, dim=1).cpu().numpy()
-                        true_labels = labels.cpu()
+                        pred_labels = torch.argmax(logits, dim=1).cpu().numpy()[0]
+                        true_labels = labels.cpu()[0]
                         # Add labels to grid (PIL overlay)
                         grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
                         grid_pil = Image.fromarray(grid_np)
@@ -575,12 +575,11 @@ def main():
                             font = ImageFont.load_default()
                         cell_w = grid_pil.width // cols
                         cell_h = grid_pil.height // cols
-                        for j in range(batch_size):
-                            row, col = divmod(j, cols)
-                            x = col * cell_w + cell_w // 2 - 30
-                            y = row * cell_h + cell_h - 20
-                            label_text = f"T:{idx_to_class[int(true_labels[j])]} P:{idx_to_class[int(pred_labels[j])]}"
-                            draw.text((x, y), label_text, fill='black', font=font, stroke_width=0.1, stroke_fill='black')
+                        row, col = divmod(j, cols)
+                        x = col * cell_w + cell_w // 2 - 30
+                        y = row * cell_h + cell_h - 20
+                        label_text = f"T:{idx_to_class[int(true_labels)]} P:{idx_to_class[int(pred_labels)]}"
+                        draw.text((x, y), label_text, fill='black', font=font, stroke_width=0.1, stroke_fill='black')
                         # Back to tensor
                         grid_with_labels = torch.from_numpy(np.array(grid_pil)).permute(2, 0, 1).float() / 255.0
                         # TensorBoard: full batch!
@@ -674,11 +673,11 @@ def main():
                 font = ImageFont.load_default()
             cell_w = grid_pil.width // cols
             cell_h = grid_pil.height // cols
-            for j in range(batch_size):
+            for j in range(total_batch):
                 row, col = divmod(j, cols)
                 x = col * cell_w + cell_w // 2 - 30
                 y = row * cell_h + cell_h - 20
-                label_text = f"T:{idx_to_class[int(true_labels[j])]}"
+                label_text = f"T:{idx_to_class[int(true_labels[j])]} P:{idx_to_class[int(pred_labels[j])]}"
                 draw.text((x, y), label_text, fill='black', font=font, stroke_width=0.1, stroke_fill='black')
             # Back to tensor
             grid_with_labels = torch.from_numpy(np.array(grid_pil)).permute(2, 0, 1).float() / 255.0
