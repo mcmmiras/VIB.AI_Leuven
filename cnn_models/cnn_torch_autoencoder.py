@@ -543,7 +543,7 @@ def main():
                     inputs, labels = data[0].to(device), data[1].to(device)
                     logits, recon = net(inputs)
                     loss_cls_val = ce(logits, labels)
-                    labelsmse = [np.array(label) for label in labels]
+                    labelsmse = [label.cpu().numpy() for label in labels]
                     mse_class = mse(logits, labelsmse)
                     loss_rec_val = mse(recon, inputs)
                     loss = loss_cls_val + 0.1 * loss_rec_val
