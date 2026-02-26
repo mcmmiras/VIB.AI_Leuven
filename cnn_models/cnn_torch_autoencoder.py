@@ -640,6 +640,7 @@ def main():
     total_pred = {classname: 0 for classname in class_list}
     y_pred = list()
     y_true = list()
+    y_logits = list()
     with torch.no_grad():
         for batch, data in enumerate(testloader):
             images, labels = data[0].to(device), data[1].to(device)
@@ -647,6 +648,7 @@ def main():
             _, predictions = torch.max(outputs, 1)
             y_pred.extend(predictions.cpu().numpy())
             y_true.extend(labels.cpu().numpy())
+            y_logits.extend(outputs)
             total += labels.size(0)
             correct += (predictions == labels).sum().item()
             total_batch = labels.size(0)
@@ -710,18 +712,19 @@ def main():
     y_true = torch.tensor(y_true)
     y_pred = torch.tensor(y_pred)
     print("Classes and assigned labels:")
-    print(class_list)
+    for key,val in class_to_idx.items():
+        print(f"{key}: {val}")
     cm = confusion_matrix(y_true, y_pred)
-    cm_display = ConfusionMatrixDisplay(confusion_matrix=cm)
+    cm_display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_to_idx.keys())
     cm_display.plot()
     plt.savefig(f"{name}_confusion_matrix.png")
     plt.show()
 
     if len(class_list) == 2:
-        print(binary_f1_score(y_pred, y_true))
+        print("F1-score",binary_f1_score(y_pred, y_true))
     else:
-        print(multiclass_f1_score(y_pred, y_true, num_classes=2, average='micro'))
-        print(multiclass_f1_score(y_pred, y_true, num_classes=2, average='macro'))
+        print("F1-score",multiclass_f1_score(y_pred, y_true, num_classes=len(class_list), average='micro'))
+        print("F1-score",multiclass_f1_score(y_pred, y_true, num_classes=len(class_list), average='macro'))
 
 if __name__ == "__main__":
     main()
