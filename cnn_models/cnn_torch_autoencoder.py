@@ -513,7 +513,7 @@ def main():
                 logits, recon = net(inputs)
                 loss_cls = ce(logits, labels)
                 print(logits, labels)
-                print(loss_cls_val)
+                print(loss_cls)
                 print(mse(logits, labels))
                 loss_rec = mse(recon, inputs)
                 loss = loss_cls + 0.1 * loss_rec
