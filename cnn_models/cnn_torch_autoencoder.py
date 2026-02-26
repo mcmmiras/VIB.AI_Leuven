@@ -540,9 +540,10 @@ def main():
                 for batch_idx, data in enumerate(valloader):
                     global_step_val += 1
                     inputs, labels = data[0].to(device), data[1].to(device)
-                    images = inputs
-                    logits, recon = net(images)
+                    logits, recon = net(inputs)
                     loss_cls_val = ce(logits, labels)
+                    print(logits, labels)
+                    print(loss_cls_val)
                     loss_rec_val = mse(recon, inputs)
                     loss = loss_cls_val + 0.1 * loss_rec_val
                     loss_val_epoch.append(loss_rec_val.item()) # Using reconstruction loss as parameter to guide early-stopping
@@ -729,8 +730,8 @@ def main():
         print("F1-score",multiclass_f1_score(y_pred, y_true, num_classes=len(class_list), average='micro'))
         print("F1-score",multiclass_f1_score(y_pred, y_true, num_classes=len(class_list), average='macro'))
 
-    for logit, soft, pred, true in zip(y_logits,y_softmax,y_pred,y_true):
-        print(logit, soft, pred, true)
+    #for logit, soft, pred, true in zip(y_logits,y_softmax,y_pred,y_true):
+    #    print(logit, soft, pred, true)
 
 if __name__ == "__main__":
     main()
