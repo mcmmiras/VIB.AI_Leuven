@@ -512,8 +512,6 @@ def main():
                 # forward + backward + optimize
                 logits, recon = net(inputs)
                 loss_cls = ce(logits, labels)
-                print(logits, labels)
-                print(loss_cls)
                 #print(mse(logits, labels))
                 loss_rec = mse(recon, inputs)
                 loss = loss_cls + 0.1 * loss_rec
@@ -545,9 +543,8 @@ def main():
                     inputs, labels = data[0].to(device), data[1].to(device)
                     logits, recon = net(inputs)
                     loss_cls_val = ce(logits, labels)
-                    print(logits, labels)
-                    print(loss_cls_val)
-                    #print(mse(logits, labels))
+                    labelsmse = [np.array(label) for label in labels]
+                    mse_class = mse(logits, labelsmse)
                     loss_rec_val = mse(recon, inputs)
                     loss = loss_cls_val + 0.1 * loss_rec_val
                     loss_val_epoch.append(loss_rec_val.item()) # Using reconstruction loss as parameter to guide early-stopping
@@ -555,8 +552,11 @@ def main():
                     _, predicted = torch.max(logits, 1)
                     correct_val = (predicted == labels).sum().item()
                     total_val = labels.size(0)
+                    acc = correct_val / total_val
                     writer.add_scalar("Validation/Reconstruction_loss", loss_rec_val.item(), global_step_val)
                     writer.add_scalar("Validation/Classification_loss", loss_cls_val.item(), global_step_val)
+                    writer.add_scalar("Validation/Classification_MSEloss", mse_class.item(), global_step_val)
+                    writer.add_scalar("Validation/Classification_accuracy", acc, global_step_val)
                     writer.add_scalar("Validation/Total_loss", loss.item(), global_step_val)
                     acc = correct_val / total_val  # Correct predictions in a validation epoch
                     if batch_idx == 0:
