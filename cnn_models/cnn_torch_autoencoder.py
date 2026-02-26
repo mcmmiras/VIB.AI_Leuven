@@ -1,5 +1,6 @@
 import sys
 import torch
+from torcheval.metrics.functional import binary_f1_score, multiclass_f1_score
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
@@ -14,6 +15,7 @@ import os
 import pandas as pd
 from sklearn.decomposition import PCA, SparsePCA
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 from PIL import Image, ImageDraw, ImageFont
 from Bio.PDB import PDBParser, MMCIFParser, DSSP
 from collections import defaultdict, Counter
@@ -525,8 +527,8 @@ def main():
                 acc = correct_batch / total_batch  # Correct predictions in a training batch
                 # ---- TensorBoard scalar logging ----
                 writer.add_scalar("Training/Total_loss", loss.item(), global_step)
-                writer.add_scalar("Training/Decoder_loss", loss_rec.item(), global_step)
-                writer.add_scalar("Training/Encoder_loss", loss_cls.item(), global_step)
+                writer.add_scalar("Training/Reconstruction_loss", loss_rec.item(), global_step)
+                writer.add_scalar("Training/Classification_loss", loss_cls.item(), global_step)
                 # Print loss after every 10 mini-batches
                 if i % 10 == 9:
                     print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 10:.3f}')
@@ -548,11 +550,10 @@ def main():
                     _, predicted = torch.max(logits, 1)
                     correct_val = (predicted == labels).sum().item()
                     total_val = labels.size(0)
-                    writer.add_scalar("Validation/Decoder_loss", loss_rec_val.item(), global_step_val)
-                    writer.add_scalar("Validation/Encoder_loss", loss_cls_val.item(), global_step_val)
+                    writer.add_scalar("Validation/Reconstruction_loss", loss_rec_val.item(), global_step_val)
+                    writer.add_scalar("Validation/Classification_loss", loss_cls_val.item(), global_step_val)
                     writer.add_scalar("Validation/Total_loss", loss.item(), global_step_val)
                     acc = correct_val / total_val  # Correct predictions in a validation epoch
-                    writer.add_scalar("Validation/Encoder_accuracy", acc, global_step_val)
                     if batch_idx == 0:
                         batch_size = images.shape[0]  # e.g. 32
                         # Full batch: orig|recon pairs
@@ -637,11 +638,15 @@ def main():
     total = 0
     correct_pred = {classname: 0 for classname in class_list}
     total_pred = {classname: 0 for classname in class_list}
+    y_pred = list()
+    y_true = list()
     with torch.no_grad():
         for batch, data in enumerate(testloader):
             images, labels = data[0].to(device), data[1].to(device)
             outputs, recon = net(images)
             _, predictions = torch.max(outputs, 1)
+            y_pred.extend(predictions.cpu().numpy())
+            y_true.extend(labels.cpu().numpy())
             total += labels.size(0)
             correct += (predictions == labels).sum().item()
             total_batch = labels.size(0)
@@ -651,7 +656,7 @@ def main():
                     correct_pred[idx_to_class[int(prediction)]] += 1
                 total_pred[idx_to_class[int(prediction)]] += 1
             acc = correct_batch / total_batch # Accuracy over testing batch
-            writer.add_scalar("Testing/Encoder_accuracy", acc, batch+1)
+            writer.add_scalar("Testing/Classification_accuracy", acc, batch+1)
 
             # Full batch: orig|recon pairs
             orig_batch = images.cpu()
@@ -701,6 +706,22 @@ def main():
 
     print(f"Finished Autoencoder Testing on {total} images.")
 
+    print("Statistical details\n","="*50)
+    y_true = torch.tensor(y_true)
+    y_pred = torch.tensor(y_pred)
+    print("Classes and assigned labels:")
+    print(class_list)
+    cm = confusion_matrix(y_true, y_pred)
+    cm_display = ConfusionMatrixDisplay(confusion_matrix=cm)
+    cm_display.plot()
+    plt.savefig(f"{name}_confusion_matrix.png")
+    plt.show()
+
+    if len(class_list) == 2:
+        print(binary_f1_score(y_pred, y_true))
+    else:
+        print(multiclass_f1_score(y_pred, y_true, num_classes=2, average='micro'))
+        print(multiclass_f1_score(y_pred, y_true, num_classes=2, average='macro'))
 
 if __name__ == "__main__":
     main()
