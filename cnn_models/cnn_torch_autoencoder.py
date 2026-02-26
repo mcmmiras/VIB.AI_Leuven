@@ -514,7 +514,7 @@ def main():
                 loss_cls = ce(logits, labels)
                 print(logits, labels)
                 print(loss_cls)
-                print(mse(logits, labels))
+                #print(mse(logits, labels))
                 loss_rec = mse(recon, inputs)
                 loss = loss_cls + 0.1 * loss_rec
                 loss.backward()
@@ -547,7 +547,7 @@ def main():
                     loss_cls_val = ce(logits, labels)
                     print(logits, labels)
                     print(loss_cls_val)
-                    print(mse(logits, labels))
+                    #print(mse(logits, labels))
                     loss_rec_val = mse(recon, inputs)
                     loss = loss_cls_val + 0.1 * loss_rec_val
                     loss_val_epoch.append(loss_rec_val.item()) # Using reconstruction loss as parameter to guide early-stopping
