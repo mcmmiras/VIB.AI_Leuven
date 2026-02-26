@@ -641,6 +641,7 @@ def main():
     y_pred = list()
     y_true = list()
     y_logits = list()
+    y_softmax = list()
     with torch.no_grad():
         for batch, data in enumerate(testloader):
             images, labels = data[0].to(device), data[1].to(device)
@@ -649,6 +650,7 @@ def main():
             y_pred.extend(predictions.cpu().numpy())
             y_true.extend(labels.cpu().numpy())
             y_logits.extend(outputs)
+            y_softmax.extend(nn.functional.softmax(outputs, dim=1))
             total += labels.size(0)
             correct += (predictions == labels).sum().item()
             total_batch = labels.size(0)
@@ -725,6 +727,9 @@ def main():
     else:
         print("F1-score",multiclass_f1_score(y_pred, y_true, num_classes=len(class_list), average='micro'))
         print("F1-score",multiclass_f1_score(y_pred, y_true, num_classes=len(class_list), average='macro'))
+
+    for logit, soft, pred, true in zip(y_logits,y_softmax,y_pred,y_true):
+        print(logit, soft, pred, true)
 
 if __name__ == "__main__":
     main()
