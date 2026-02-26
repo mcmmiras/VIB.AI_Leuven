@@ -487,6 +487,7 @@ def main():
         optimizer = optim.Adam(net.parameters(), lr=1e-3)  # Standard for deep nets
         # Training of CNN
         global_step = 0
+        global_step_val = 0
         loss_list = list()
 
         # EARLY STOPPING BY LOSS
@@ -495,12 +496,12 @@ def main():
         patience_counter = 0
 
         for epoch in range(200):  # loop over the dataset multiple times
-            global_step += 1
             net.train()
             running_loss = 0.0
             running_cls = 0
             running_rec = 0
             for i, data in enumerate(trainloader, 0):
+                global_step += 1
                 # get the inputs; data is a list of [inputs, labels]
                 # Inputs and labels are sent to the GPU at every step
                 inputs, labels = data[0].to(device), data[1].to(device)
@@ -523,10 +524,9 @@ def main():
                 total_batch = labels.size(0)
                 acc = correct_batch / total_batch  # Correct predictions in a training batch
                 # ---- TensorBoard scalar logging ----
-                writer.add_scalar("Autoencoder/Total_loss_train", loss.item(), global_step)
-                writer.add_scalar("Autoencoder/Decoder_loss_train", loss_rec.item(), global_step)
-                writer.add_scalar("Autoencoder/Encoder_loss_train", loss_cls.item(), global_step)
-                writer.add_scalar("Autoencoder/Encoder_accuracy_val", acc, global_step)
+                writer.add_scalar("Training/Total_loss", loss.item(), global_step)
+                writer.add_scalar("Training/Decoder_loss", loss_rec.item(), global_step)
+                writer.add_scalar("Training/Encoder_loss", loss_cls.item(), global_step)
                 # Print loss after every 10 mini-batches
                 if i % 10 == 9:
                     print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 10:.3f}')
@@ -536,6 +536,7 @@ def main():
             loss_val_epoch = list()
             with torch.no_grad():
                 for batch_idx, data in enumerate(valloader):
+                    global_step_val += 1
                     inputs, labels = data[0].to(device), data[1].to(device)
                     images = inputs
                     logits, recon = net(images)
@@ -547,11 +548,11 @@ def main():
                     _, predicted = torch.max(logits, 1)
                     correct_val = (predicted == labels).sum().item()
                     total_val = labels.size(0)
-                    writer.add_scalar("Autoencoder/Decoder_loss_val", loss_rec_val.item(), global_step)
-                    writer.add_scalar("Autoencoder/Encoder_loss_val", loss_cls_val.item(), global_step)
-                    writer.add_scalar("Autoencoder/Total_loss_val", loss.item(), global_step)
+                    writer.add_scalar("Validation/Decoder_loss", loss_rec_val.item(), global_step_val)
+                    writer.add_scalar("Validation/Encoder_loss", loss_cls_val.item(), global_step_val)
+                    writer.add_scalar("Validation/Total_loss", loss.item(), global_step_val)
                     acc = correct_val / total_val  # Correct predictions in a validation epoch
-                    writer.add_scalar("Autoencoder/Encoder_accuracy_val", acc, global_step)
+                    writer.add_scalar("Validation/Encoder_accuracy", acc, global_step_val)
                     if batch_idx == 0:
                         batch_size = images.shape[0]  # e.g. 32
                         # Full batch: orig|recon pairs
@@ -650,7 +651,7 @@ def main():
                     correct_pred[idx_to_class[int(prediction)]] += 1
                 total_pred[idx_to_class[int(prediction)]] += 1
             acc = correct_batch / total_batch # Accuracy over testing batch
-            writer.add_scalar("Autoencoder/Encoder_accuracy_test", acc, batch+1)
+            writer.add_scalar("Testing/Encoder_accuracy", acc, batch+1)
 
             # Full batch: orig|recon pairs
             orig_batch = images.cpu()
