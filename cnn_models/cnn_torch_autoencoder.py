@@ -549,7 +549,7 @@ def main():
                         labelsmse.append([0,0])
                     for n, l in enumerate(labels):
                         labelsmse[n][int(l)] = 1
-                    labelsmse = torch.tensor(np.array(labelsmse))
+                    labelsmse = torch.tensor(np.array(labelsmse)).to(device)
                     print(labelsmse, labelsmse.shape, logits, logits.shape)
                     mse_class = mse(logits, labelsmse)
                     loss_rec_val = mse(recon, inputs)
