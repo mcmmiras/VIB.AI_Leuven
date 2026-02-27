@@ -59,6 +59,7 @@ class Net(nn.Module): # Currently an autoencoder
         super(Net, self).__init__()
         # Convolution + pooling layers
         self.dropout = nn.Dropout(0.5)
+        #self.spatial_dropout = nn.Dropout2d(p=0.5)
         self.conv1 = nn.Conv2d(input_channels, 16, 4, stride=2, padding=1)
         #self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(16, 32, 4, stride=2, padding=1)
@@ -86,12 +87,15 @@ class Net(nn.Module): # Currently an autoencoder
         #x = self.pool(F.relu(self.conv2(x)))
         #x = self.pool(F.relu(self.conv3(x)))
         x = F.relu(self.conv1(x))
+        #x = self.spatial_dropout(x)
         x = F.relu(self.conv2(x))
+        #x = self.spatial_dropout(x)
         x = F.relu(self.conv3(x))
         x = torch.flatten(x, 1)  # flatten all dimensions except batch
         x = F.relu(self.fc1(x))
         x = self.dropout(x) # Drop neurons
-        x = F.relu(self.fc2(x)) # Latent vector
+        #x = F.relu(self.fc2(x)) # Latent vector
+        x = self.fc2(x) # Latent vector without activation
         return x
 
     def decoder(self, x):
@@ -103,7 +107,7 @@ class Net(nn.Module): # Currently an autoencoder
         x = F.relu(self.iconv3(x))
         x = F.relu(self.iconv2(x))
         #x = self.upsample(x)
-        x = torch.sigmoid(self.iconv1(x))  # sigmoid for image output [0,1]
+        x = torch.tanh(self.iconv1(x))  # sigmoid for image output [0,1]
         return x
 
     def forward(self, x):
