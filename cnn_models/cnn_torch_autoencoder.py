@@ -107,7 +107,7 @@ class Net(nn.Module): # Currently an autoencoder
         x = F.relu(self.iconv3(x))
         x = F.relu(self.iconv2(x))
         #x = self.upsample(x)
-        x = torch.tanh(self.iconv1(x))  # sigmoid for image output [0,1]
+        x = torch.sigmoid(self.iconv1(x))  # sigmoid for image output [0,1]
         return x
 
     def forward(self, x):
