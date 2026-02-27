@@ -544,7 +544,9 @@ def main():
                     logits, recon = net(inputs)
                     loss_cls_val = ce(logits, labels)
                     print(logits.shape, labels.shape)
-                    labelsmse = [0,0]*16
+                    labelsmse = list()
+                    for num in range(16):
+                        labelsmse.append([0,0])
                     for n, l in enumerate(labels):
                         labelsmse[n][int(l)] = 1
                     print(labelsmse)
