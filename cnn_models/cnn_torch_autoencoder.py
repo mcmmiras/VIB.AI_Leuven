@@ -491,7 +491,7 @@ def main():
         mse = nn.MSELoss() # Reconstruction task
         # Optimizer
         #optimizer = optim.Adam(net.parameters(), lr=1e-3)  # Standard for deep nets
-        optimizer = torch.optim.Adam(net.parameters(), lr=1e-5, weight_decay=1e-5) #L2 regularization to prevent overfitting
+        optimizer = torch.optim.AdamW(net.parameters(), lr=1e-5, weight_decay=1e-5)  # Decouples weight decay from gradients, directly applied to weights
 
         # Training of CNN
         global_step = 0
@@ -562,7 +562,7 @@ def main():
                     """
                     loss_rec_val = mse(recon, inputs)
                     loss = loss_cls_val + 0.1 * loss_rec_val
-                    loss_val_epoch.append(loss_rec_val.item()) # Using reconstruction loss as parameter to guide early-stopping
+                    loss_val_epoch.append(loss.item()) # Using reconstruction loss as parameter to guide early-stopping
                     #loss_val_epoch.append(loss.item()) # Using reconstruction loss as parameter to guide early-stopping
                     # Predictions on validation batches
                     _, predicted = torch.max(logits, 1)
