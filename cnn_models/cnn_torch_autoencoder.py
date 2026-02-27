@@ -545,7 +545,7 @@ def main():
                     loss_cls_val = ce(logits, labels)
                     print(logits.shape, labels.shape)
                     labelsmse = list()
-                    for num in range(16):
+                    for num in range(len(labels)):
                         labelsmse.append([0,0])
                     for n, l in enumerate(labels):
                         labelsmse[n][int(l)] = 1
