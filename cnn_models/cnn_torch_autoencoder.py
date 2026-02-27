@@ -367,7 +367,7 @@ def main():
     if f"{name}_train_set.csv" not in os.listdir(rootdir):
         train_df, temp_df = train_test_split(
             df,
-            test_size=0.3,
+            test_size=0.2,
             random_state=312,  # for reproducibility
             stratify=df['orient']  # ensures orient distribution is similar
         )
@@ -491,7 +491,7 @@ def main():
         mse = nn.MSELoss() # Reconstruction task
         # Optimizer
         #optimizer = optim.Adam(net.parameters(), lr=1e-3)  # Standard for deep nets
-        optimizer = torch.optim.Adam(net.parameters(), lr=1e-4, weight_decay=1e-5) #L2 regularization to prevent overfitting
+        optimizer = torch.optim.Adam(net.parameters(), lr=1e-5, weight_decay=1e-5) #L2 regularization to prevent overfitting
 
         # Training of CNN
         global_step = 0
