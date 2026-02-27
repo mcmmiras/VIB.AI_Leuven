@@ -561,7 +561,7 @@ def main():
                     mse_class = mse(logits, labelsmse)
                     """
                     loss_rec_val = mse(recon, inputs)
-                    loss = loss_cls_val + 0.1 * loss_rec_val
+                    loss = loss_cls_val + 0.4 * loss_rec_val
                     loss_val_epoch.append(loss.item()) # Using reconstruction loss as parameter to guide early-stopping
                     #loss_val_epoch.append(loss.item()) # Using reconstruction loss as parameter to guide early-stopping
                     # Predictions on validation batches
