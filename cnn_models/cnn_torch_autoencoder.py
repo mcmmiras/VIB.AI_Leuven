@@ -551,7 +551,7 @@ def main():
                         labelsmse[n][int(l)] = 1
                     labelsmse = torch.tensor(np.array(labelsmse)).to(device)
                     print(labelsmse, labelsmse.shape, logits, logits.shape)
-                    mse_class = mse(torch.tensor(torch.max(logits,1)[1]), labelsmse)
+                    mse_class = mse(logits, labelsmse)
                     loss_rec_val = mse(recon, inputs)
                     loss = loss_cls_val + 0.1 * loss_rec_val
                     loss_val_epoch.append(loss_rec_val.item()) # Using reconstruction loss as parameter to guide early-stopping
