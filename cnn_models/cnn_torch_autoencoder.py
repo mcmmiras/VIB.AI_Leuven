@@ -493,7 +493,7 @@ def main():
         loss_list = list()
 
         # EARLY STOPPING BY LOSS
-        best_val_loss = 1
+        best_val_loss = 100000
         patience = 10  # Stop after 10 epochs without improvement
         patience_counter = 0
 
@@ -543,6 +543,7 @@ def main():
                     inputs, labels = data[0].to(device), data[1].to(device)
                     logits, recon = net(inputs)
                     loss_cls_val = ce(logits, labels)
+                    """
                     print(logits.shape, labels.shape)
                     labelsmse = list()
                     for num in range(len(labels)):
@@ -552,9 +553,11 @@ def main():
                     labelsmse = torch.tensor(np.array(labelsmse)).to(device)
                     print(labelsmse, labelsmse.shape, logits, logits.shape)
                     mse_class = mse(logits, labelsmse)
+                    """
                     loss_rec_val = mse(recon, inputs)
                     loss = loss_cls_val + 0.1 * loss_rec_val
-                    loss_val_epoch.append(loss_rec_val.item()) # Using reconstruction loss as parameter to guide early-stopping
+                    #loss_val_epoch.append(loss_rec_val.item()) # Using reconstruction loss as parameter to guide early-stopping
+                    loss_val_epoch.append(loss.item()) # Using reconstruction loss as parameter to guide early-stopping
                     # Predictions on validation batches
                     _, predicted = torch.max(logits, 1)
                     correct_val = (predicted == labels).sum().item()
@@ -562,7 +565,7 @@ def main():
                     acc = correct_val / total_val
                     writer.add_scalar("Validation/Reconstruction_loss", loss_rec_val.item(), global_step_val)
                     writer.add_scalar("Validation/Classification_loss", loss_cls_val.item(), global_step_val)
-                    writer.add_scalar("Validation/Classification_MSEloss", mse_class.item(), global_step_val)
+                    #writer.add_scalar("Validation/Classification_MSEloss", mse_class.item(), global_step_val)
                     writer.add_scalar("Validation/Classification_accuracy", acc, global_step_val)
                     writer.add_scalar("Validation/Total_loss", loss.item(), global_step_val)
                     acc = correct_val / total_val  # Correct predictions in a validation epoch
