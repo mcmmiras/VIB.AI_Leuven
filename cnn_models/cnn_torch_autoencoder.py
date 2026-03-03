@@ -376,7 +376,7 @@ def main():
     if f"{name}_train_set.csv" not in os.listdir(rootdir):
         train_df, temp_df = train_test_split(
             df,
-            test_size=0.2,
+            test_size=0.3,
             random_state=312,  # for reproducibility
             stratify=df['orient']  # ensures orient distribution is similar
         )
