@@ -137,6 +137,7 @@ class CustomImageDataset(Dataset):
         self.transform = transform
         self.target_transform = target_transform
         self.classes = classes
+        out = open(out,"w")
     def __len__(self):
         return len(self.img_labels)
     def __getitem__(self, idx):
@@ -172,6 +173,7 @@ class FragmentedImageDataset(Dataset):
         self.img_labels = pd.read_csv(annotations_file, header=0, sep="\t")
         self.img_dir = img_dir
         self.img_list = os.listdir(img_dir)
+        out = open(out,"w")
         # BUILD flattened list: each fragment = one dataset entry
         self.samples = []  # List of (img_path, label)
         if "build" not in img_dir:
@@ -189,6 +191,7 @@ class FragmentedImageDataset(Dataset):
                     else:
                         label = self.classes["parallel"]
                     self.samples.append((img_path, label))
+                    out.write(f"{img_path}\t{label}\n")
         else:
             for img_file in os.listdir(img_dir):
                 img_path = os.path.join(img_dir, img_file)
