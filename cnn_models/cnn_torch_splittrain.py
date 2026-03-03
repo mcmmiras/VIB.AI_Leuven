@@ -758,7 +758,7 @@ def main():
         if "--fragments" in sys.argv:
             # Training
             trainset = FragmentedImageDataset(annotations_file=f"{name}_train_set.csv",
-                                              img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
+                                              img_dir=os.path.join(os.getcwd(), f"{name}_build_emb_train/connected"),
                                               classes=class_to_idx,
                                               out=f"{name}_train_set_images.txt",
                                               transform=transform
@@ -767,13 +767,13 @@ def main():
             print("Classes:", class_to_idx)
             # Validation:
             valset = FragmentedImageDataset(annotations_file=f"{name}_val_set.csv",
-                                            img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
+                                            img_dir=os.path.join(os.getcwd(), f"{name}_build_emb_val"),
                                             classes=class_to_idx,
                                             out=f"{name}_val_set_images.txt",
                                             transform=transform)
             # Testing
             testset = FragmentedImageDataset(annotations_file=f"{name}_test_set.csv",
-                                             img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
+                                             img_dir=os.path.join(os.getcwd(), f"{name}_build_emb_test"),
                                              classes=class_to_idx,
                                              out=f"{name}_test_set_images.txt",
                                              transform=transform
@@ -781,7 +781,7 @@ def main():
         else:
             # Training
             trainset = CustomImageDataset(annotations_file=f"{name}_train_set.csv",
-                                          img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
+                                          img_dir=os.path.join(os.getcwd(), f"{name}_build_emb_train"),
                                           classes=class_to_idx,
                                           out=f"{name}_train_set_images.txt",
                                           transform=transform
@@ -790,14 +790,14 @@ def main():
             print("Classes:", class_to_idx)
             # Validation
             valset = CustomImageDataset(annotations_file=f"{name}_val_set.csv",
-                                        img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
+                                        img_dir=os.path.join(os.getcwd(), f"{name}_build_emb_val"),
                                         classes=class_to_idx,
                                         out=f"{name}_val_set_images.txt",
                                         transform=transform
                                         )
             # Testing
             testset = CustomImageDataset(annotations_file=f"{name}_test_set.csv",
-                                         img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
+                                         img_dir=os.path.join(os.getcwd(), f"{name}_build_emb_test"),
                                          classes=class_to_idx,
                                          out=f"{name}_test_set_images.txt",
                                          transform=transform
