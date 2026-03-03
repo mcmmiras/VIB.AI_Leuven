@@ -758,7 +758,7 @@ def main():
         if "--fragments" in sys.argv:
             # Training
             trainset = FragmentedImageDataset(annotations_file=f"{name}_train_set.csv",
-                                              img_dir=os.path.join(os.getcwd(), f"{name}_build_emb_train/connected"),
+                                              img_dir=os.path.join(os.getcwd(), f"{name}_build_emb_train"),
                                               classes=class_to_idx,
                                               out=f"{name}_train_set_images.txt",
                                               transform=transform
