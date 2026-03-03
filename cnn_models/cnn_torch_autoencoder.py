@@ -773,7 +773,7 @@ def main():
 if __name__ == "__main__":
     main()
     for file in os.listdir(os.getcwd()):
-        if ",19" in file:
+        if "log" in file:
             os.rename(file, f'results_{name}_model.txt')
-        elif "log" in file:
-            os.remove(file)
+        #elif "log" in file:
+        #    os.remove(file)
