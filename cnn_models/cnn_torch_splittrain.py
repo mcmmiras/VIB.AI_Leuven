@@ -126,12 +126,13 @@ class Net(nn.Module): # Currently an autoencoder
 
 
 class CustomImageDataset(Dataset):
-    def __init__(self, annotations_file, img_dir, classes, transform=None, target_transform=None):
+    def __init__(self, annotations_file, img_dir, classes, out, transform=None, target_transform=None):
         self.img_labels = pd.read_csv(annotations_file, header=0, sep="\t")
         self.img_dir = img_dir
         self.transform = transform
         self.target_transform = target_transform
         self.classes = classes
+        out = open(out,"w")
     def __len__(self):
         return len(self.img_labels)
     def __getitem__(self, idx):
@@ -154,11 +155,12 @@ class CustomImageDataset(Dataset):
             image = self.transform(image)
         if self.target_transform:
             label = self.target_transform(label)
+        out.write(f"{img_path}\t{label}\n")
         return image, label
 
 
 class FragmentedImageDataset(Dataset):
-    def __init__(self, annotations_file, img_dir, classes, transform=None, target_transform=None):
+    def __init__(self, annotations_file, img_dir, classes, out, transform=None, target_transform=None):
         self.transform = transform
         self.target_transform = target_transform
         self.classes = classes
@@ -166,6 +168,7 @@ class FragmentedImageDataset(Dataset):
         self.img_labels = pd.read_csv(annotations_file, header=0, sep="\t")
         self.img_dir = img_dir
         self.img_list = os.listdir(img_dir)
+        out = open(out,"w")
         # BUILD flattened list: each fragment = one dataset entry
         self.samples = []  # List of (img_path, label)
         if "build" not in img_dir:
@@ -178,13 +181,19 @@ class FragmentedImageDataset(Dataset):
                 # Add EACH fragment as separate sample with SAME label
                 for img_file in matching_imgs:
                     img_path = os.path.join(img_dir, img_file)
+                    if "antiparallel" in img_file:
+                        label = self.classes["antiparallel"]
+                    else:
+                        label = self.classes["parallel"]
                     self.samples.append((img_path, label))
+                    out.write(f"{img_path}\t{label}\n")
         else:
             for img_file in os.listdir(img_dir):
                 img_path = os.path.join(img_dir, img_file)
                 label = img_file.split("_")[0]
                 label = self.classes[label]
                 self.samples.append((img_path, label))
+                out.write(f"{img_path}\t{label}\n")
     def __len__(self):
         return len(self.samples)  # Total fragments across ALL annotations
     def __getitem__(self, idx):
@@ -408,39 +417,50 @@ def main():
     if "--fragments" in sys.argv:
         # Training
         trainset = FragmentedImageDataset(annotations_file=f"{name}_train_set.csv",
-                                      img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
-                                      classes=class_to_idx,
-                                      transform=transform)
+                                          img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
+                                          classes=class_to_idx,
+                                          out=f"{name}_train_set_images.txt",
+                                          transform=transform
+                                          )
 
         print("Classes:", class_to_idx)
         # Validation:
         valset = FragmentedImageDataset(annotations_file=f"{name}_val_set.csv",
-                                     img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
-                                     classes=class_to_idx,
-                                     transform=transform)
+                                        img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
+                                        classes=class_to_idx,
+                                        out=f"{name}_val_set_images.txt",
+                                        transform=transform)
         # Testing
         testset = FragmentedImageDataset(annotations_file=f"{name}_test_set.csv",
-                                     img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
-                                     classes=class_to_idx,
-                                     transform=transform)
+                                         img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
+                                         classes=class_to_idx,
+                                         out=f"{name}_test_set_images.txt",
+                                         transform=transform
+                                         )
     else:
         # Training
         trainset = CustomImageDataset(annotations_file=f"{name}_train_set.csv",
-                                      img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
+                                      img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
                                       classes=class_to_idx,
-                                      transform=transform)
+                                      out=f"{name}_train_set_images.txt",
+                                      transform=transform
+                                      )
 
         print("Classes:", class_to_idx)
         # Validation
         valset = CustomImageDataset(annotations_file=f"{name}_val_set.csv",
-                                     img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
-                                     classes=class_to_idx,
-                                     transform=transform)
+                                    img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
+                                    classes=class_to_idx,
+                                    out=f"{name}_val_set_images.txt",
+                                    transform=transform
+                                    )
         # Testing
         testset = CustomImageDataset(annotations_file=f"{name}_test_set.csv",
-                                     img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
+                                     img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
                                      classes=class_to_idx,
-                                     transform=transform)
+                                     out=f"{name}_test_set_images.txt",
+                                     transform=transform
+                                     )
 
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
     valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2)
@@ -738,39 +758,50 @@ def main():
         if "--fragments" in sys.argv:
             # Training
             trainset = FragmentedImageDataset(annotations_file=f"{name}_train_set.csv",
-                                              img_dir = f"{name}_build_emb_train",
+                                              img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
                                               classes=class_to_idx,
-                                              transform=transform)
+                                              out=f"{name}_train_set_images.txt",
+                                              transform=transform
+                                              )
 
             print("Classes:", class_to_idx)
             # Validation:
             valset = FragmentedImageDataset(annotations_file=f"{name}_val_set.csv",
-                                            img_dir=f"{name}_build_emb_val",
+                                            img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
                                             classes=class_to_idx,
+                                            out=f"{name}_val_set_images.txt",
                                             transform=transform)
             # Testing
             testset = FragmentedImageDataset(annotations_file=f"{name}_test_set.csv",
-                                             img_dir=f"{name}_build_emb_test",
+                                             img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
                                              classes=class_to_idx,
-                                             transform=transform)
+                                             out=f"{name}_test_set_images.txt",
+                                             transform=transform
+                                             )
         else:
             # Training
             trainset = CustomImageDataset(annotations_file=f"{name}_train_set.csv",
-                                          img_dir=f"{name}_build_emb_train",
+                                          img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
                                           classes=class_to_idx,
-                                          transform=transform)
+                                          out=f"{name}_train_set_images.txt",
+                                          transform=transform
+                                          )
 
             print("Classes:", class_to_idx)
             # Validation
             valset = CustomImageDataset(annotations_file=f"{name}_val_set.csv",
-                                        img_dir=f"{name}_build_emb_val",
+                                        img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
                                         classes=class_to_idx,
-                                        transform=transform)
+                                        out=f"{name}_val_set_images.txt",
+                                        transform=transform
+                                        )
             # Testing
             testset = CustomImageDataset(annotations_file=f"{name}_test_set.csv",
-                                         img_dir=f"{name}_build_emb_test",
+                                         img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
                                          classes=class_to_idx,
-                                         transform=transform)
+                                         out=f"{name}_test_set_images.txt",
+                                         transform=transform
+                                         )
 
         trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
         valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2)
@@ -979,7 +1010,7 @@ def main():
 if __name__ == "__main__":
     main()
     for file in os.listdir(os.getcwd()):
-        if ",19" in file:
+        if "log" in file:
             os.rename(file, f'results_{name}_model.txt')
-        elif "log" in file:
-            os.remove(file)
+        #elif "log" in file:
+        #    os.remove(file)
