@@ -17,6 +17,7 @@ from sklearn.model_selection import train_test_split
 from PIL import Image, ImageDraw, ImageFont
 from Bio.PDB import PDBParser, MMCIFParser, DSSP
 from collections import defaultdict, Counter
+from imblearn.under_sampling import RandomUnderSampler
 parser = PDBParser(QUIET=True)
 
 # Global values
@@ -89,7 +90,7 @@ class Net(nn.Module): # Currently an autoencoder
         x = torch.flatten(x, 1)  # flatten all dimensions except batch
         x = F.relu(self.fc1(x))
         x = self.dropout(x) # Drop neurons
-        x = F.relu(self.fc2(x)) # Latent vector
+        x = self.fc2(x) # Latent vector
         return x
 
     def decoder(self, x):
