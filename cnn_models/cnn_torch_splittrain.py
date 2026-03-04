@@ -191,8 +191,10 @@ class FragmentedImageDataset(Dataset):
         else:
             for img_file in os.listdir(img_dir):
                 img_path = os.path.join(img_dir, img_file)
-                label = img_file.split("_")[0]
-                label = self.classes[label]
+                if "antiparallel" in img_file:
+                    label = self.classes["antiparallel"]
+                else:
+                    label = self.classes["parallel"]
                 self.samples.append((img_path, label))
                 out.write(f"{img_path}\t{label}\n")
     def __len__(self):
