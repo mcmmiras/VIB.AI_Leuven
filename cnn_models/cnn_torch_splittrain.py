@@ -392,6 +392,7 @@ def main():
 
         # Fix imbalance:
         # Separate features (X) and target (y) for undersampling
+        columns = X_train.columns
         X_train = train_df.drop('orient', axis=1)
         y_train = train_df['orient']
 
@@ -399,7 +400,7 @@ def main():
         X_train_resampled, y_train_resampled = rus.fit_resample(X_train, y_train)
 
         # Convert back to DataFrame
-        train_df = pd.DataFrame(X_train_resampled, columns=X_train.columns)
+        train_df = pd.DataFrame(X_train_resampled, columns=columns)
         train_df['orient'] = y_train_resampled
 
         class_list = sorted(df["orient"].unique())
