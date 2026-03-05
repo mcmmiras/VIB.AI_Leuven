@@ -470,27 +470,27 @@ def main():
                                          transform=transform
                                          )
 
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
-    valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
+        valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
 
-    print("=" * 50)
-    print("DATASET SIZES:")
-    print(f"Train dataset: {len(trainset)} samples")
-    print(f"Validation dataset: {len(valset)} samples")
-    print(f"Test dataset:  {len(testset)} samples")
-    print(f"Train batches: {len(trainloader)} batches")
-    print(f"Validation batches: {len(valloader)} batches")
-    print(f"Test batches:  {len(testloader)} batches")
-    print("=" * 50)
+        print("=" * 50)
+        print("DATASET SIZES:")
+        print(f"Train dataset: {len(trainset)} samples")
+        print(f"Validation dataset: {len(valset)} samples")
+        print(f"Test dataset:  {len(testset)} samples")
+        print(f"Train batches: {len(trainloader)} batches")
+        print(f"Validation batches: {len(valloader)} batches")
+        print(f"Test batches:  {len(testloader)} batches")
+        print("=" * 50)
 
-    # Check first batch
-    images, labels, name_img = next(iter(trainloader))
-    print("FIRST BATCH SHAPES:")
-    print(f"Images: {images.shape}")
-    print(f"Labels: {labels.shape}")
-    print(f"Image range: [{images.min():.3f}, {images.max():.3f}]")
-    print("=" * 50)
+        # Check first batch
+        images, labels, name_img = next(iter(trainloader))
+        print("FIRST BATCH SHAPES:")
+        print(f"Images: {images.shape}")
+        print(f"Labels: {labels.shape}")
+        print(f"Image range: [{images.min():.3f}, {images.max():.3f}]")
+        print("=" * 50)
 
     if "--train" in sys.argv:
         print("Starting Decoder Training...")
