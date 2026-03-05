@@ -1020,6 +1020,58 @@ def main():
             except:
                 print(f"No representing entries for {classname:5s} in testset.")
 
+    else:
+        class_list = sorted(df["orient"].unique())
+        idx_to_class = {i: c for i, c in enumerate(class_list)}
+        class_to_idx = {c: i for i, c in idx_to_class.items()}
+        testset = FragmentedImageDataset(annotations_file=f"{name}_test_set.csv",
+                                         img_dir=os.path.join(os.getcwd(), f"{name}_build_emb_test"),
+                                         classes=class_to_idx,
+                                         out=f"{name}_test_set_images.txt",
+                                         transform=transform
+                                         )
+        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
+        PATH = f'./{name}_decoder_net.pth'
+        net.load_state_dict(torch.load(PATH, weights_only=True))
+        net = net.to(device)
+        # Whole dataset predictions (per class and overall)
+        correct = 0
+        total = 0
+        correct_pred = {classname: 0 for classname in class_list}
+        total_pred = {classname: 0 for classname in class_list}
+        # again no gradients needed
+        with torch.no_grad():
+            final = open(f"{name}_predictions.txt", "w")
+            final.write(f"name\ttrue\tpredicted\n")
+            for batch, data in enumerate(testloader):
+                total_batch = 0
+                correct_batch = 0
+                images, labels = data[0].to(device), data[1].to(device)
+                names_img = data[2]
+                outputs = net(images)
+                _, predictions = torch.max(outputs, 1)
+                total += labels.size(0)
+                total_batch += labels.size(0)
+                correct += (predictions == labels).sum().item()
+                correct_batch += (predictions == labels).sum().item()
+                # Correct predictions for each class
+                for label, prediction, name_img in zip(labels, predictions, names_img):
+                    final.write(f"{name_img}\t{label}\t{prediction}\n")
+                    if label == prediction:
+                        correct_pred[idx_to_class[int(prediction)]] += 1
+                    total_pred[idx_to_class[int(prediction)]] += 1
+                acc = correct_batch / total_batch  # Correct predictions in a testing batch
+                writer.add_scalar("Classification/Accuracy_test", acc, batch + 1)
+        print(f'Accuracy of the network on the {total} test images: {100 * correct // total} %')
+        # Accuracy for each class
+        for classname, correct_count in correct_pred.items():
+            try:
+                accuracy = 100 * float(correct_count) / total_pred[classname]
+                print(f'Accuracy for class: {classname:5s} is {accuracy:.1f} %')
+            except:
+                print(f"No representing entries for {classname:5s} in testset.")
+
+
 
 if __name__ == "__main__":
     main()
