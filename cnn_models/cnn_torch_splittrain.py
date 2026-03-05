@@ -52,10 +52,10 @@ residue_types = {
 
 def custom_collate(batch):
     """Handle mixed tensor/non-tensor returns"""
-    images, labels, name_imgs, extra_values = zip(*batch)
+    images, labels, name_imgs= zip(*batch)
     images = torch.stack(images)  # Only stack tensors
     labels = torch.tensor(labels)
-    return images, labels, list(name_imgs), list(extra_values)  # Keep extras as lists
+    return images, labels, list(name_imgs)  # Keep extras as lists
 
 class Net(nn.Module): # Currently an autoencoder
     def __init__(self, input_channels=3, num_classes=3, image_size=(128,128),reconstruct = False):
