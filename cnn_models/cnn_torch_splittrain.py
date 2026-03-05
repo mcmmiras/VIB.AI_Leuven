@@ -491,9 +491,9 @@ def main():
                                          transform=transform
                                          )
     if "--train" in sys.argv:
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2, collate_fn=custom_collate())
-        valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate())
-        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate())
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2, collate_fn=custom_collate)
+        valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate)
 
         print("=" * 50)
         print("DATASET SIZES:")
@@ -834,9 +834,9 @@ def main():
                                          transform=transform
                                          )
 
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2, collate_fn=custom_collate())
-        valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate())
-        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate())
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2, collate_fn=custom_collate)
+        valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate)
 
         # Showing some random training images
         dataiter = iter(trainloader)
