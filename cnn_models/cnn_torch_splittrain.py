@@ -173,7 +173,7 @@ class FragmentedImageDataset(Dataset):
         out = open(out,"w")
         # BUILD flattened list: each fragment = one dataset entry
         self.samples = []  # List of (img_path, label)
-        if "build" not in img_dir:
+        if f"{name}_build" not in img_dir:
             for idx in range(len(self.img_labels)):
                 base_name = self.img_labels.iloc[idx, 0].upper()
                 label_idx = self.img_labels.iloc[idx, 1]
