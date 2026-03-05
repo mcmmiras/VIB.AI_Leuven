@@ -421,7 +421,7 @@ def main():
         transform = transformL
 
     batch_size = 16
-    if "--fragments" in sys.argv:
+    if "--fragments" and "--train" in sys.argv:
         # Training
         trainset = FragmentedImageDataset(annotations_file=f"{name}_train_set.csv",
                                           img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
