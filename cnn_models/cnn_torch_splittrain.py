@@ -1039,6 +1039,7 @@ def main():
             channels_num = 1
         net = Net(input_channels=channels_num, num_classes=2, image_size=(128,128), reconstruct=True)
         net.load_state_dict(torch.load(PATH, weights_only=True))
+        print(net)
         net = net.to(device)
         # Whole dataset predictions (per class and overall)
         correct = 0
