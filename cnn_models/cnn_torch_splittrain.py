@@ -214,6 +214,7 @@ class FragmentedImageDataset(Dataset):
         label = torch.tensor(label, dtype=torch.long)
         if self.transform:
             image = self.transform(image)
+            print(image)
         if self.target_transform:
             label = self.target_transform(label)
         return image, label, name_img
