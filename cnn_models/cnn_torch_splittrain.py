@@ -392,7 +392,7 @@ def main():
 
         # Fix imbalance:
         # Separate features (X) and target (y) for undersampling
-        columns = X_train.columns
+        columns = train_df.columns
         X_train = train_df.drop('orient', axis=1)
         y_train = train_df['orient']
 
