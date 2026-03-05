@@ -469,7 +469,7 @@ def main():
                                          out=f"{name}_test_set_images.txt",
                                          transform=transform
                                          )
-
+    if "--train" in sys.argv:
         trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
         valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2)
         testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
@@ -492,7 +492,6 @@ def main():
         print(f"Image range: [{images.min():.3f}, {images.max():.3f}]")
         print("=" * 50)
 
-    if "--train" in sys.argv:
         print("Starting Decoder Training...")
         # Showing some random training images
         dataiter = iter(trainloader)
