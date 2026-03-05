@@ -196,7 +196,8 @@ class FragmentedImageDataset(Dataset):
                     label = self.classes["antiparallel"]
                 else:
                     label = self.classes["parallel"]
-                name_img = img_file.split("_")[-1]
+                name_img = img_file.split("_")[1:]
+                name_img = ("_").join(name_img)
                 name_img = name_img.replace(".png", "")
                 self.samples.append((img_path, label, name_img))
                 out.write(f"{img_path}\t{label}\n")
