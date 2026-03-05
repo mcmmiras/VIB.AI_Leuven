@@ -433,7 +433,7 @@ def main():
                                           transform=transform
                                           )
         # Test one sample
-        img, lbl, name = trainset[0]
+        img, lbl, name_img = trainset[0]
         print(f"Label tensor: {lbl}, shape: {lbl.shape}, value: {lbl.item()}")
         # Should print: tensor(0) shape: torch.Size([]) value: 0
         print("Classes:", class_to_idx)
