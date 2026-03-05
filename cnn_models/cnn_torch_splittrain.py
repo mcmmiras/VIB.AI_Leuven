@@ -18,6 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 from Bio.PDB import PDBParser, MMCIFParser, DSSP
 from collections import defaultdict, Counter
 from imblearn.under_sampling import RandomUnderSampler
+rus = RandomUnderSampler(random_state=312)
 parser = PDBParser(QUIET=True)
 
 # Global values
@@ -388,6 +389,19 @@ def main():
             random_state=312,
             stratify=temp_df['orient']
         )
+
+        # Fix imbalance:
+        # Separate features (X) and target (y) for undersampling
+        X_train = train_df["pdb"]
+        y_train = train_df['orient']
+
+        # Apply undersampling - returns numpy arrays
+        X_train_resampled, y_train_resampled = rus.fit_resample(X_train, y_train)
+
+        # Convert back to DataFrame
+        train_df = pd.DataFrame(X_train_resampled, columns=X_train.columns[:2])
+        train_df['orient'] = y_train_resampled
+
         class_list = sorted(df["orient"].unique())
         idx_to_class = {i: c for i, c in enumerate(class_list)}
         class_to_idx = {c: i for i, c in idx_to_class.items()}
