@@ -50,6 +50,12 @@ residue_types = {
     'VAL': 'hydrophobic'
 }
 
+def custom_collate(batch):
+    """Handle mixed tensor/non-tensor returns"""
+    images, labels, name_imgs, extra_values = zip(*batch)
+    images = torch.stack(images)  # Only stack tensors
+    labels = torch.tensor(labels)
+    return images, labels, list(name_imgs), list(extra_values)  # Keep extras as lists
 
 class Net(nn.Module): # Currently an autoencoder
     def __init__(self, input_channels=3, num_classes=3, image_size=(128,128),reconstruct = False):
@@ -485,9 +491,9 @@ def main():
                                          transform=transform
                                          )
     if "--train" in sys.argv:
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
-        valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2)
-        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2, collate_fn=custom_collate())
+        valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate())
+        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate())
 
         print("=" * 50)
         print("DATASET SIZES:")
@@ -828,9 +834,9 @@ def main():
                                          transform=transform
                                          )
 
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
-        valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2)
-        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2, collate_fn=custom_collate())
+        valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate())
+        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate())
 
         # Showing some random training images
         dataiter = iter(trainloader)
