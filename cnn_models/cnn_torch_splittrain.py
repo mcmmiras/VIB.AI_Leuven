@@ -186,8 +186,8 @@ class FragmentedImageDataset(Dataset):
                         label = self.classes["antiparallel"]
                     else:
                         label = self.classes["parallel"]
-                    name = img_file.replace(".png","")
-                    self.samples.append((img_path, label,name))
+                    name_img = img_file.replace(".png","")
+                    self.samples.append((img_path, label,name_img))
                     out.write(f"{img_path}\t{label}\n")
         else:
             for img_file in os.listdir(img_dir):
@@ -196,14 +196,14 @@ class FragmentedImageDataset(Dataset):
                     label = self.classes["antiparallel"]
                 else:
                     label = self.classes["parallel"]
-                name = img_file.split("_")[-1]
-                name = name.replace(".png", "")
-                self.samples.append((img_path, label, name))
+                name_img = img_file.split("_")[-1]
+                name_img = name_img.replace(".png", "")
+                self.samples.append((img_path, label, name_img))
                 out.write(f"{img_path}\t{label}\n")
     def __len__(self):
         return len(self.samples)  # Total fragments across ALL annotations
     def __getitem__(self, idx):
-        img_path, label, name = self.samples[idx]
+        img_path, label, name_img = self.samples[idx]
         # Load single image
         if "--color" in sys.argv:
             image = Image.open(img_path).convert("RGB")  # ✅ compatible with ToTensor() in the transformer
@@ -214,7 +214,7 @@ class FragmentedImageDataset(Dataset):
             image = self.transform(image)
         if self.target_transform:
             label = self.target_transform(label)
-        return image, label, name
+        return image, label, name_img
 
 def generateImages(file, pdb_dir, classes, fragmented=False):
     global name
@@ -986,10 +986,13 @@ def main():
         total_pred = {classname: 0 for classname in class_list}
         # again no gradients needed
         with torch.no_grad():
+            final = open(f"{name}_predictions.txt","w")
+            final.write(f"name\ttrue\tpredicted\n")
             for batch, data in enumerate(testloader):
                 total_batch = 0
                 correct_batch = 0
                 images, labels = data[0].to(device), data[1].to(device)
+                names_img = data[2]
                 outputs = net(images)
                 _, predictions = torch.max(outputs, 1)
                 total += labels.size(0)
@@ -997,7 +1000,8 @@ def main():
                 correct += (predictions == labels).sum().item()
                 correct_batch += (predictions == labels).sum().item()
                 # Correct predictions for each class
-                for label, prediction in zip(labels, predictions):
+                for label, prediction,name_img in zip(labels, predictions, names_img):
+                    final.write(f"{name_img}\t{label}\t{prediction}\n")
                     if label == prediction:
                         correct_pred[idx_to_class[int(prediction)]] += 1
                     total_pred[idx_to_class[int(prediction)]] += 1
