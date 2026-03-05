@@ -203,14 +203,17 @@ class FragmentedImageDataset(Dataset):
                 out.write(f"{img_path}\t{label}\n")
     def __len__(self):
         return len(self.samples)  # Total fragments across ALL annotations
+
     def __getitem__(self, idx):
-        img_path, label, name_img = self.samples[idx]
-        # Load single image
+        img_path, label_str, name_img = self.samples[idx]  # label_str is "parallel"/"antiparallel"
+        # Load image
         if "--color" in sys.argv:
-            image = Image.open(img_path).convert("RGB")  # ✅ compatible with ToTensor() in the transformer
+            image = Image.open(img_path).convert("RGB")
         else:
             image = Image.open(img_path).convert("L")
-        label = torch.tensor(label, dtype=torch.long)
+        # Convert string label → index using YOUR class_to_idx
+        label_idx = self.classes[label_str]  # e.g. "parallel" → 0
+        label = torch.tensor(label_idx, dtype=torch.long)  # ✅ Now scalar tensor
         if self.transform:
             image = self.transform(image)
         if self.target_transform:
@@ -429,7 +432,10 @@ def main():
                                           out=f"{name}_train_set_images.txt",
                                           transform=transform
                                           )
-
+        # Test one sample
+        img, lbl, name = trainset[0]
+        print(f"Label tensor: {lbl}, shape: {lbl.shape}, value: {lbl.item()}")
+        # Should print: tensor(0) shape: torch.Size([]) value: 0
         print("Classes:", class_to_idx)
         # Validation:
         valset = FragmentedImageDataset(annotations_file=f"{name}_val_set.csv",
@@ -878,7 +884,7 @@ def main():
                 global_step += 1
                 # Print loss after every 10 mini-batches
                 if i % 10 == 9:
-                    print(f'[{epoch + 1}, {i + 1:5d}] tail lloss: {running_loss / 10:.3f}')
+                    print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 10:.3f}')
                     running_loss = 0.0
             # Log original vs reconstructed images in Tensorboard per epoch
             net.eval()
