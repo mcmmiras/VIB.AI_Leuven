@@ -1032,6 +1032,11 @@ def main():
                                          )
         testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
         PATH = f'./{name}_decoder_net.pth'
+        # Convolutional Neural Network
+        if "--color" in sys.argv:
+            channels_num = 3
+        else:
+            channels_num = 1
         net = Net(input_channels=channels_num, num_classes=2, image_size=(128,128), reconstruct=True)
         net.load_state_dict(torch.load(PATH, weights_only=True))
         net = net.to(device)
