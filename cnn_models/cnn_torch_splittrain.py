@@ -762,9 +762,9 @@ def main():
                     total += 1
 
 
-    print("Starting Classifier Training...")
 
     if "--train" in sys.argv:
+        print("Starting Classifier Training...")
         if "--fragments" in sys.argv:
             # Training
             trainset = FragmentedImageDataset(annotations_file=f"{name}_train_set.csv",
@@ -1037,7 +1037,7 @@ def main():
             channels_num = 3
         else:
             channels_num = 1
-        net = Net(input_channels=channels_num, num_classes=2, image_size=(128,128), reconstruct=True)
+        net = Net(input_channels=channels_num, num_classes=2, image_size=(128,128), reconstruct=False)
         net.load_state_dict(torch.load(PATH, weights_only=True))
         print(net)
         net = net.to(device)
