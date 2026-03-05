@@ -445,29 +445,30 @@ def main():
                                          transform=transform
                                          )
     else:
-        # Training
-        trainset = CustomImageDataset(annotations_file=f"{name}_train_set.csv",
-                                      img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
-                                      classes=class_to_idx,
-                                      out=f"{name}_train_set_images.txt",
-                                      transform=transform
-                                      )
+        if "--train" in sys.argv:
+            # Training
+            trainset = CustomImageDataset(annotations_file=f"{name}_train_set.csv",
+                                          img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
+                                          classes=class_to_idx,
+                                          out=f"{name}_train_set_images.txt",
+                                          transform=transform
+                                          )
 
-        print("Classes:", class_to_idx)
-        # Validation
-        valset = CustomImageDataset(annotations_file=f"{name}_val_set.csv",
-                                    img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
-                                    classes=class_to_idx,
-                                    out=f"{name}_val_set_images.txt",
-                                    transform=transform
-                                    )
-        # Testing
-        testset = CustomImageDataset(annotations_file=f"{name}_test_set.csv",
-                                     img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
-                                     classes=class_to_idx,
-                                     out=f"{name}_test_set_images.txt",
-                                     transform=transform
-                                     )
+            print("Classes:", class_to_idx)
+            # Validation
+            valset = CustomImageDataset(annotations_file=f"{name}_val_set.csv",
+                                        img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
+                                        classes=class_to_idx,
+                                        out=f"{name}_val_set_images.txt",
+                                        transform=transform
+                                        )
+            # Testing
+            testset = CustomImageDataset(annotations_file=f"{name}_test_set.csv",
+                                         img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
+                                         classes=class_to_idx,
+                                         out=f"{name}_test_set_images.txt",
+                                         transform=transform
+                                         )
 
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
     valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2)
