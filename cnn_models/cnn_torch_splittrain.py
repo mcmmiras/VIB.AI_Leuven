@@ -1031,7 +1031,7 @@ def main():
                                          transform=transform
                                          )
         testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
-        PATH = f'./{name}_decoder_net.pth'
+        PATH = f'./{name}_classifier_net.pth'
         # Convolutional Neural Network
         if "--color" in sys.argv:
             channels_num = 3
