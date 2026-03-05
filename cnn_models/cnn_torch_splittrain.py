@@ -483,7 +483,7 @@ def main():
     print("=" * 50)
 
     # Check first batch
-    images, labels = next(iter(trainloader))
+    images, labels, name_img = next(iter(trainloader))
     print("FIRST BATCH SHAPES:")
     print(f"Images: {images.shape}")
     print(f"Labels: {labels.shape}")
@@ -494,7 +494,7 @@ def main():
         print("Starting Decoder Training...")
         # Showing some random training images
         dataiter = iter(trainloader)
-        images, labels = next(dataiter)
+        images, labels, name_img = next(dataiter)
         print(' '.join([str(label) for label in labels]))
         print(' '.join(idx_to_class[label.item()] for label in labels))
         imshow(torchvision.utils.make_grid(images))
@@ -617,7 +617,7 @@ def main():
     # Showing some random testing images
     print("Starting Decoder Testing...")
     dataiter = iter(testloader)
-    images, labels = next(dataiter)
+    images, labels, name_img = next(dataiter)
     print('GroundTruth: ',' '.join(idx_to_class[label.item()] for label in labels))
     imshow(torchvision.utils.make_grid(images))
     # Loading trained model
@@ -815,7 +815,7 @@ def main():
 
         # Showing some random training images
         dataiter = iter(trainloader)
-        images, labels = next(dataiter)
+        images, labels, name_img = next(dataiter)
         print(' '.join([str(label) for label in labels]))
         print(' '.join(idx_to_class[label.item()] for label in labels))
         imshow(torchvision.utils.make_grid(images))
@@ -957,7 +957,7 @@ def main():
         print("Starting Classifier Testing...")
         # Showing some random testing images
         dataiter = iter(testloader)
-        images, labels = next(dataiter)
+        images, labels, name_img = next(dataiter)
         print('GroundTruth: ', ' '.join(idx_to_class[label.item()] for label in labels))
         imshow(torchvision.utils.make_grid(images))
 
