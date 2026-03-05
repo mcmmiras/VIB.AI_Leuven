@@ -615,151 +615,151 @@ def main():
         print('Finished Decoder Training')
 
 
-    # Showing some random testing images
-    print("Starting Decoder Testing...")
-    dataiter = iter(testloader)
-    images, labels, name_img = next(dataiter)
-    print('GroundTruth: ',' '.join(idx_to_class[label.item()] for label in labels))
-    imshow(torchvision.utils.make_grid(images))
-    # Loading trained model
-    if "--color" in sys.argv:
-        channels_num = 3
-    else:
-        channels_num = 1
-    net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128), reconstruct=True)
-    PATH = f'./{name}_decoder_net.pth'
-    net.load_state_dict(torch.load(PATH, weights_only=True))
-    net = net.to(device)
+        # Showing some random testing images
+        print("Starting Decoder Testing...")
+        dataiter = iter(testloader)
+        images, labels, name_img = next(dataiter)
+        print('GroundTruth: ',' '.join(idx_to_class[label.item()] for label in labels))
+        imshow(torchvision.utils.make_grid(images))
+        # Loading trained model
+        if "--color" in sys.argv:
+            channels_num = 3
+        else:
+            channels_num = 1
+        net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128), reconstruct=True)
+        PATH = f'./{name}_decoder_net.pth'
+        net.load_state_dict(torch.load(PATH, weights_only=True))
+        net = net.to(device)
 
-    # Reconstructions
-    images = images.to(device)
-    labels = labels.to(device)
-    recons = net(images)
-    print(net)
+        # Reconstructions
+        images = images.to(device)
+        labels = labels.to(device)
+        recons = net(images)
+        print(net)
 
-    with torch.no_grad():
-        total = 0
-        for batch, data in enumerate(testloader):
-            images, labels = data[0].to(device), data[1].to(device)
-            total += len(images)
-            recon = net(images)
-            batch_size = images.shape[0]  # e.g. 32
-            # Full batch: orig|recon pairs
-            orig_batch = images.cpu()
-            recon_batch = recon.cpu()
-            comparisons = torch.cat([orig_batch, recon_batch], dim=3)  # [32, 1, 128, 256]
-            # Dynamic grid layout (auto-fit batch size)
-            cols = int(np.ceil(np.sqrt(batch_size)))  # ~6x6 for batch=32
-            cols = batch_size // cols
-            grid = vutils.make_grid(comparisons, nrow=cols, normalize=True, scale_each=True)
-            # Get ALL predictions
-            true_labels = labels.cpu()
-            # Add labels to grid (PIL overlay)
-            grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
-            grid_pil = Image.fromarray(grid_np)
-            draw = ImageDraw.Draw(grid_pil)
-            try:
-                font = ImageFont.truetype("arial", 20)
-            except:
-                font = ImageFont.load_default()
-            cell_w = grid_pil.width // cols
-            cell_h = grid_pil.height // cols
-            for j in range(batch_size):
-                row, col = divmod(j, cols)
-                x = col * cell_w + cell_w // 2 - 30
-                y = row * cell_h + cell_h - 20
-                label_text = f"T:{idx_to_class[int(true_labels[j])]}"
-                draw.text((x, y), label_text, fill='black', font=font, stroke_width=0.1, stroke_fill='black')
-            # Back to tensor
-            grid_with_labels = torch.from_numpy(np.array(grid_pil)).permute(2, 0, 1).float() / 255.0
-            # TensorBoard: full batch!
-            writer.add_image(f"Batch: {batch}", grid_with_labels, batch)
-            # SAVE to directory
-            batch_dir = f"{name}_recon_grids_test"
-            os.makedirs(batch_dir, exist_ok=True)
-            save_path = f"{batch_dir}/{batch}.png"
-            grid_pil.save(save_path, "PNG", dpi=(150, 150))
-
-    print(f"Finished Decoder Testing on {total} images.")
-
-    print("Rebuilding training images with current best model...")
-    newimgs = f"{name}_build_emb_train"
-    os.makedirs(newimgs, exist_ok=True)
-    newimgs = f"{name}_build_emb_val"
-    os.makedirs(newimgs, exist_ok=True)
-    newimgs = f"{name}_build_emb_test"
-    os.makedirs(newimgs, exist_ok=True)
-
-    with torch.no_grad():
-        total = 0
-        for batch, data in enumerate(trainloader):
-            images, labels = data[0].to(device), data[1].to(device)
-            name_imgs = data[2]
-            total += len(images)
-            recon = net(images)
-            batch_size = images.shape[0]  # e.g. 32
-            # Full training batch:
-            recon_batch = recon.cpu()
-            true_labels = labels.cpu()
-            for recon, label, name_img in zip(recon_batch, true_labels, name_imgs):
+        with torch.no_grad():
+            total = 0
+            for batch, data in enumerate(testloader):
+                images, labels = data[0].to(device), data[1].to(device)
+                total += len(images)
+                recon = net(images)
+                batch_size = images.shape[0]  # e.g. 32
+                # Full batch: orig|recon pairs
+                orig_batch = images.cpu()
+                recon_batch = recon.cpu()
+                comparisons = torch.cat([orig_batch, recon_batch], dim=3)  # [32, 1, 128, 256]
                 # Dynamic grid layout (auto-fit batch size)
-                grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
+                cols = int(np.ceil(np.sqrt(batch_size)))  # ~6x6 for batch=32
+                cols = batch_size // cols
+                grid = vutils.make_grid(comparisons, nrow=cols, normalize=True, scale_each=True)
+                # Get ALL predictions
+                true_labels = labels.cpu()
                 # Add labels to grid (PIL overlay)
                 grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
                 grid_pil = Image.fromarray(grid_np)
+                draw = ImageDraw.Draw(grid_pil)
+                try:
+                    font = ImageFont.truetype("arial", 20)
+                except:
+                    font = ImageFont.load_default()
+                cell_w = grid_pil.width // cols
+                cell_h = grid_pil.height // cols
+                for j in range(batch_size):
+                    row, col = divmod(j, cols)
+                    x = col * cell_w + cell_w // 2 - 30
+                    y = row * cell_h + cell_h - 20
+                    label_text = f"T:{idx_to_class[int(true_labels[j])]}"
+                    draw.text((x, y), label_text, fill='black', font=font, stroke_width=0.1, stroke_fill='black')
                 # Back to tensor
+                grid_with_labels = torch.from_numpy(np.array(grid_pil)).permute(2, 0, 1).float() / 255.0
                 # TensorBoard: full batch!
+                writer.add_image(f"Batch: {batch}", grid_with_labels, batch)
                 # SAVE to directory
-                recons_dir = f"{name}_build_emb_train"
-                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{name_img}.png"
+                batch_dir = f"{name}_recon_grids_test"
+                os.makedirs(batch_dir, exist_ok=True)
+                save_path = f"{batch_dir}/{batch}.png"
                 grid_pil.save(save_path, "PNG", dpi=(150, 150))
-                total+=1
-        total = 0
-        for batch, data in enumerate(valloader):
-            images, labels = data[0].to(device), data[1].to(device)
-            name_imgs = data[2]
-            total += len(images)
-            recon = net(images)
-            batch_size = images.shape[0]  # e.g. 32
-            # Full training batch:
-            recon_batch = recon.cpu()
-            true_labels = labels.cpu()
-            for recon, label, name_img in zip(recon_batch, true_labels, name_imgs):
-                # Dynamic grid layout (auto-fit batch size)
-                grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
-                # Add labels to grid (PIL overlay)
-                grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
-                grid_pil = Image.fromarray(grid_np)
-                # Back to tensor
-                # TensorBoard: full batch!
-                # SAVE to directory
-                recons_dir = f"{name}_build_emb_val"
-                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{name_img}.png"
-                grid_pil.save(save_path, "PNG", dpi=(150, 150))
-                total+=1
-        total = 0
-        for batch, data in enumerate(valloader):
-            images, labels = data[0].to(device), data[1].to(device)
-            name_imgs = data[2]
-            total += len(images)
-            recon = net(images)
-            batch_size = images.shape[0]  # e.g. 32
-            # Full training batch:
-            recon_batch = recon.cpu()
-            true_labels = labels.cpu()
-            for recon, label, name_img in zip(recon_batch, true_labels, name_imgs):
-                # Dynamic grid layout (auto-fit batch size)
-                grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
-                # Add labels to grid (PIL overlay)
-                grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
-                grid_pil = Image.fromarray(grid_np)
-                # Back to tensor
-                # TensorBoard: full batch!
-                # SAVE to directory
-                recons_dir = f"{name}_build_emb_test"
-                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{name_img}.png"
-                grid_pil.save(save_path, "PNG", dpi=(150, 150))
-                total += 1
+
+        print(f"Finished Decoder Testing on {total} images.")
+
+        print("Rebuilding training images with current best model...")
+        newimgs = f"{name}_build_emb_train"
+        os.makedirs(newimgs, exist_ok=True)
+        newimgs = f"{name}_build_emb_val"
+        os.makedirs(newimgs, exist_ok=True)
+        newimgs = f"{name}_build_emb_test"
+        os.makedirs(newimgs, exist_ok=True)
+
+        with torch.no_grad():
+            total = 0
+            for batch, data in enumerate(trainloader):
+                images, labels = data[0].to(device), data[1].to(device)
+                name_imgs = data[2]
+                total += len(images)
+                recon = net(images)
+                batch_size = images.shape[0]  # e.g. 32
+                # Full training batch:
+                recon_batch = recon.cpu()
+                true_labels = labels.cpu()
+                for recon, label, name_img in zip(recon_batch, true_labels, name_imgs):
+                    # Dynamic grid layout (auto-fit batch size)
+                    grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
+                    # Add labels to grid (PIL overlay)
+                    grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
+                    grid_pil = Image.fromarray(grid_np)
+                    # Back to tensor
+                    # TensorBoard: full batch!
+                    # SAVE to directory
+                    recons_dir = f"{name}_build_emb_train"
+                    save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{name_img}.png"
+                    grid_pil.save(save_path, "PNG", dpi=(150, 150))
+                    total+=1
+            total = 0
+            for batch, data in enumerate(valloader):
+                images, labels = data[0].to(device), data[1].to(device)
+                name_imgs = data[2]
+                total += len(images)
+                recon = net(images)
+                batch_size = images.shape[0]  # e.g. 32
+                # Full training batch:
+                recon_batch = recon.cpu()
+                true_labels = labels.cpu()
+                for recon, label, name_img in zip(recon_batch, true_labels, name_imgs):
+                    # Dynamic grid layout (auto-fit batch size)
+                    grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
+                    # Add labels to grid (PIL overlay)
+                    grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
+                    grid_pil = Image.fromarray(grid_np)
+                    # Back to tensor
+                    # TensorBoard: full batch!
+                    # SAVE to directory
+                    recons_dir = f"{name}_build_emb_val"
+                    save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{name_img}.png"
+                    grid_pil.save(save_path, "PNG", dpi=(150, 150))
+                    total+=1
+            total = 0
+            for batch, data in enumerate(valloader):
+                images, labels = data[0].to(device), data[1].to(device)
+                name_imgs = data[2]
+                total += len(images)
+                recon = net(images)
+                batch_size = images.shape[0]  # e.g. 32
+                # Full training batch:
+                recon_batch = recon.cpu()
+                true_labels = labels.cpu()
+                for recon, label, name_img in zip(recon_batch, true_labels, name_imgs):
+                    # Dynamic grid layout (auto-fit batch size)
+                    grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
+                    # Add labels to grid (PIL overlay)
+                    grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
+                    grid_pil = Image.fromarray(grid_np)
+                    # Back to tensor
+                    # TensorBoard: full batch!
+                    # SAVE to directory
+                    recons_dir = f"{name}_build_emb_test"
+                    save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{name_img}.png"
+                    grid_pil.save(save_path, "PNG", dpi=(150, 150))
+                    total += 1
 
 
     print("Starting Classifier Training...")
