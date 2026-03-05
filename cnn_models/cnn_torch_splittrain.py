@@ -203,17 +203,14 @@ class FragmentedImageDataset(Dataset):
                 out.write(f"{img_path}\t{label}\n")
     def __len__(self):
         return len(self.samples)  # Total fragments across ALL annotations
-
     def __getitem__(self, idx):
-        img_path, label_str, name_img = self.samples[idx]  # label_str is "parallel"/"antiparallel"
-        # Load image
+        img_path, label, name_img = self.samples[idx]
+        # Load single image
         if "--color" in sys.argv:
-            image = Image.open(img_path).convert("RGB")
+            image = Image.open(img_path).convert("RGB")  # ✅ compatible with ToTensor() in the transformer
         else:
             image = Image.open(img_path).convert("L")
-        # Convert string label → index using YOUR class_to_idx
-        label_idx = self.classes[label_str]  # e.g. "parallel" → 0
-        label = torch.tensor(label_idx, dtype=torch.long)  # ✅ Now scalar tensor
+        label = torch.tensor(label, dtype=torch.long)
         if self.transform:
             image = self.transform(image)
         if self.target_transform:
@@ -432,10 +429,7 @@ def main():
                                           out=f"{name}_train_set_images.txt",
                                           transform=transform
                                           )
-        # Test one sample
-        img, lbl, name_img = trainset[0]
-        print(f"Label tensor: {lbl}, shape: {lbl.shape}, value: {lbl.item()}")
-        # Should print: tensor(0) shape: torch.Size([]) value: 0
+        print(trainset[0])
         print("Classes:", class_to_idx)
         # Validation:
         valset = FragmentedImageDataset(annotations_file=f"{name}_val_set.csv",
