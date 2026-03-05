@@ -186,7 +186,8 @@ class FragmentedImageDataset(Dataset):
                         label = self.classes["antiparallel"]
                     else:
                         label = self.classes["parallel"]
-                    self.samples.append((img_path, label))
+                    name = img_file.replace(".png","")
+                    self.samples.append((img_path, label,name))
                     out.write(f"{img_path}\t{label}\n")
         else:
             for img_file in os.listdir(img_dir):
@@ -195,12 +196,14 @@ class FragmentedImageDataset(Dataset):
                     label = self.classes["antiparallel"]
                 else:
                     label = self.classes["parallel"]
-                self.samples.append((img_path, label))
+                name = img_file.split("_")[-1]
+                name = name.replace(".png", "")
+                self.samples.append((img_path, label, name))
                 out.write(f"{img_path}\t{label}\n")
     def __len__(self):
         return len(self.samples)  # Total fragments across ALL annotations
     def __getitem__(self, idx):
-        img_path, label = self.samples[idx]
+        img_path, label, name = self.samples[idx]
         # Load single image
         if "--color" in sys.argv:
             image = Image.open(img_path).convert("RGB")  # ✅ compatible with ToTensor() in the transformer
@@ -211,7 +214,7 @@ class FragmentedImageDataset(Dataset):
             image = self.transform(image)
         if self.target_transform:
             label = self.target_transform(label)
-        return image, label
+        return image, label, name
 
 def generateImages(file, pdb_dir, classes, fragmented=False):
     global name
@@ -706,7 +709,7 @@ def main():
                 # TensorBoard: full batch!
                 # SAVE to directory
                 recons_dir = f"{name}_build_emb_train"
-                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
+                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{data[2]}.png"
                 grid_pil.save(save_path, "PNG", dpi=(150, 150))
                 total+=1
         total = 0
@@ -728,7 +731,7 @@ def main():
                 # TensorBoard: full batch!
                 # SAVE to directory
                 recons_dir = f"{name}_build_emb_val"
-                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
+                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{data[2]}.png"
                 grid_pil.save(save_path, "PNG", dpi=(150, 150))
                 total+=1
         total = 0
@@ -750,7 +753,7 @@ def main():
                 # TensorBoard: full batch!
                 # SAVE to directory
                 recons_dir = f"{name}_build_emb_test"
-                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
+                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{data[2]}.png"
                 grid_pil.save(save_path, "PNG", dpi=(150, 150))
                 total += 1
 
