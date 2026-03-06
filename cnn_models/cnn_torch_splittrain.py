@@ -50,12 +50,6 @@ residue_types = {
     'VAL': 'hydrophobic'
 }
 
-def custom_collate(batch):
-    """Handle mixed tensor/non-tensor returns"""
-    images, labels, name_imgs= zip(*batch)
-    images = torch.stack(images)  # Only stack tensors
-    labels = torch.tensor(labels)
-    return images, labels, list(name_imgs)  # Keep extras as lists
 
 class Net(nn.Module): # Currently an autoencoder
     def __init__(self, input_channels=3, num_classes=3, image_size=(128,128),reconstruct = False):
@@ -223,6 +217,45 @@ class FragmentedImageDataset(Dataset):
         if self.target_transform:
             label = self.target_transform(label)
         return image, label, name_img
+
+class TMBImageDataset(Dataset):
+    def __init__(self, annotations_file, img_dir, classes, out, transform=None, target_transform=None):
+        self.transform = transform
+        self.target_transform = target_transform
+        self.classes = classes
+        # READ annotations
+        self.img_labels = open(annotations_file,"r").read().splitlines()
+        self.img_dir = img_dir
+        self.img_list = os.listdir(img_dir)
+        out = open(out,"w")
+        # BUILD flattened list: each fragment = one dataset entry
+        self.samples = []  # List of (img_path, label)
+        for img_file in os.listdir(img_dir):
+            img_path = os.path.join(img_dir, img_file)
+            if "antiparallel" in img_file:
+                label = self.classes["antiparallel"]
+            else:
+                label = self.classes["parallel"]
+            name_img = img_file
+            name_img = name_img.replace(".png", "")
+            self.samples.append((img_path, label, name_img))
+            out.write(f"{img_path}\t{label}\n")
+    def __len__(self):
+        return len(self.samples)  # Total fragments across ALL annotations
+    def __getitem__(self, idx):
+        img_path, label, name_img = self.samples[idx]
+        # Load single image
+        if "--color" in sys.argv:
+            image = Image.open(img_path).convert("RGB")  # ✅ compatible with ToTensor() in the transformer
+        else:
+            image = Image.open(img_path).convert("L")
+        label = torch.tensor(label, dtype=torch.long)
+        if self.transform:
+            image = self.transform(image)
+        if self.target_transform:
+            label = self.target_transform(label)
+        return image, label, name_img
+
 
 def generateImages(file, pdb_dir, classes, fragmented=False):
     global name
@@ -395,7 +428,7 @@ def main():
             random_state=312,
             stratify=temp_df['orient']
         )
-
+        """
         # Fix imbalance:
         # Separate features (X) and target (y) for undersampling
         columns = train_df.columns
@@ -408,7 +441,7 @@ def main():
         # Convert back to DataFrame
         train_df = pd.DataFrame(X_train_resampled, columns=columns)
         train_df['orient'] = y_train_resampled
-
+        """
         class_list = sorted(df["orient"].unique())
         idx_to_class = {i: c for i, c in enumerate(class_list)}
         class_to_idx = {c: i for i, c in idx_to_class.items()}
@@ -491,9 +524,9 @@ def main():
                                          transform=transform
                                          )
     if "--train" in sys.argv:
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2, collate_fn=custom_collate)
-        valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate)
-        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
+        valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
 
         print("=" * 50)
         print("DATASET SIZES:")
@@ -834,9 +867,9 @@ def main():
                                          transform=transform
                                          )
 
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2, collate_fn=custom_collate)
-        valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate)
-        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=custom_collate)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
+        valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
 
         # Showing some random training images
         dataiter = iter(trainloader)
@@ -1045,10 +1078,11 @@ def main():
         class_list = sorted(df["orient"].unique())
         idx_to_class = {i: c for i, c in enumerate(class_list)}
         class_to_idx = {c: i for i, c in idx_to_class.items()}
-        testset = FragmentedImageDataset(annotations_file=f"{name}_test_set.csv",
-                                         img_dir=os.path.join(os.getcwd(), f"{name}_build_emb_test"),
+        print(class_to_idx)
+        testset = TMBImageDataset(annotations_file="tmb_list.txt",
+                                         img_dir=os.path.join(os.getcwd(), f"tmb_imgs/connected"),
                                          classes=class_to_idx,
-                                         out=f"{name}_test_set_images.txt",
+                                         out=f"{name}_tmb_images.txt",
                                          transform=transform
                                          )
         testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
@@ -1067,6 +1101,7 @@ def main():
         total = 0
         correct_pred = {classname: 0 for classname in class_list}
         total_pred = {classname: 0 for classname in class_list}
+        print(correct_pred)
         # again no gradients needed
         with torch.no_grad():
             final = open(f"{name}_predictions.txt", "w")
@@ -1090,7 +1125,7 @@ def main():
                     total_pred[idx_to_class[int(prediction)]] += 1
                 acc = correct_batch / total_batch  # Correct predictions in a testing batch
                 writer.add_scalar("Classification/Accuracy_test", acc, batch + 1)
-        print(f'Accuracy of the network on the {total} test images: {100 * correct // total} %')
+        print(f'Accuracy of the network on the {total} tmb images: {100 * correct // total} %')
         # Accuracy for each class
         for classname, correct_count in correct_pred.items():
             try:
