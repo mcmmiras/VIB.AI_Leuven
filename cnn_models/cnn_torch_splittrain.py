@@ -796,7 +796,7 @@ def main():
             total = 0
             for batch, data in enumerate(valloader):
                 images, labels = data[0].to(device), data[1].to(device)
-                name_imgs = data[2]
+                #name_imgs = data[2]
                 total += len(images)
                 recon = net(images)
                 batch_size = images.shape[0]  # e.g. 32
