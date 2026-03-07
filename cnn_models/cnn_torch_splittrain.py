@@ -187,8 +187,7 @@ class FragmentedImageDataset(Dataset):
                         label = self.classes["antiparallel"]
                     else:
                         label = self.classes["parallel"]
-                    name_img = img_file.replace(".png","")
-                    self.samples.append((img_path, label,name_img))
+                    self.samples.append((img_path, label))
                     out.write(f"{img_path}\t{label}\n")
         else:
             for img_file in os.listdir(img_dir):
@@ -200,12 +199,12 @@ class FragmentedImageDataset(Dataset):
                 name_img = img_file.split("_")[1:]
                 name_img = ("_").join(name_img)
                 name_img = name_img.replace(".png", "")
-                self.samples.append((img_path, label, name_img))
+                self.samples.append((img_path, label))
                 out.write(f"{img_path}\t{label}\n")
     def __len__(self):
         return len(self.samples)  # Total fragments across ALL annotations
     def __getitem__(self, idx):
-        img_path, label, name_img = self.samples[idx]
+        img_path, label= self.samples[idx]
         # Load single image
         if "--color" in sys.argv:
             image = Image.open(img_path).convert("RGB")  # ✅ compatible with ToTensor() in the transformer
@@ -216,7 +215,7 @@ class FragmentedImageDataset(Dataset):
             image = self.transform(image)
         if self.target_transform:
             label = self.target_transform(label)
-        return image, label, name_img
+        return image, label
 
 class TMBImageDataset(Dataset):
     def __init__(self, annotations_file, img_dir, classes, out, transform=None, target_transform=None):
@@ -238,7 +237,7 @@ class TMBImageDataset(Dataset):
                 label = self.classes["parallel"]
             name_img = img_file
             name_img = name_img.replace(".png", "")
-            self.samples.append((img_path, label, name_img))
+            self.samples.append((img_path, label))
             out.write(f"{img_path}\t{label}\n")
     def __len__(self):
         return len(self.samples)  # Total fragments across ALL annotations
@@ -254,7 +253,7 @@ class TMBImageDataset(Dataset):
             image = self.transform(image)
         if self.target_transform:
             label = self.target_transform(label)
-        return image, label, name_img
+        return image, label
 
 
 def generateImages(file, pdb_dir, classes, fragmented=False):
@@ -418,7 +417,7 @@ def main():
     if f"{name}_train_set.csv" not in os.listdir(rootdir):
         train_df, temp_df = train_test_split(
             df,
-            test_size=0.3,
+            test_size=0.7,
             random_state=312,  # for reproducibility
             stratify=df['orient']  # ensures orient distribution is similar
         )
@@ -539,7 +538,7 @@ def main():
         print("=" * 50)
 
         # Check first batch
-        images, labels, name_img = next(iter(trainloader))
+        images, labels = next(iter(trainloader))
         print("FIRST BATCH SHAPES:")
         print(f"Images: {images.shape}")
         print(f"Labels: {labels.shape}")
@@ -549,7 +548,7 @@ def main():
         print("Starting Decoder Training...")
         # Showing some random training images
         dataiter = iter(trainloader)
-        images, labels, name_img = next(dataiter)
+        images, labels = next(dataiter)
         print(' '.join([str(label) for label in labels]))
         print(' '.join(idx_to_class[label.item()] for label in labels))
         imshow(torchvision.utils.make_grid(images))
@@ -672,7 +671,7 @@ def main():
         # Showing some random testing images
         print("Starting Decoder Testing...")
         dataiter = iter(testloader)
-        images, labels, name_img = next(dataiter)
+        images, labels= next(dataiter)
         print('GroundTruth: ',' '.join(idx_to_class[label.item()] for label in labels))
         imshow(torchvision.utils.make_grid(images))
         # Loading trained model
@@ -746,16 +745,17 @@ def main():
 
         with torch.no_grad():
             total = 0
+            counter = 0
             for batch, data in enumerate(trainloader):
                 images, labels = data[0].to(device), data[1].to(device)
-                name_imgs = data[2]
+                #name_imgs = data[2]
                 total += len(images)
                 recon = net(images)
                 batch_size = images.shape[0]  # e.g. 32
                 # Full training batch:
                 recon_batch = recon.cpu()
                 true_labels = labels.cpu()
-                for recon, label, name_img in zip(recon_batch, true_labels, name_imgs):
+                for recon, label in zip(recon_batch, true_labels):
                     # Dynamic grid layout (auto-fit batch size)
                     grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
                     # Add labels to grid (PIL overlay)
@@ -765,20 +765,21 @@ def main():
                     # TensorBoard: full batch!
                     # SAVE to directory
                     recons_dir = f"{name}_build_emb_train"
-                    save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{name_img}.png"
+                    save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{counter}.png"
+                    counter+=1
                     grid_pil.save(save_path, "PNG", dpi=(150, 150))
                     total+=1
             total = 0
             for batch, data in enumerate(valloader):
                 images, labels = data[0].to(device), data[1].to(device)
-                name_imgs = data[2]
+                #name_imgs = data[2]
                 total += len(images)
                 recon = net(images)
                 batch_size = images.shape[0]  # e.g. 32
                 # Full training batch:
                 recon_batch = recon.cpu()
                 true_labels = labels.cpu()
-                for recon, label, name_img in zip(recon_batch, true_labels, name_imgs):
+                for recon, label in zip(recon_batch, true_labels):
                     # Dynamic grid layout (auto-fit batch size)
                     grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
                     # Add labels to grid (PIL overlay)
@@ -788,7 +789,8 @@ def main():
                     # TensorBoard: full batch!
                     # SAVE to directory
                     recons_dir = f"{name}_build_emb_val"
-                    save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{name_img}.png"
+                    save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{counter}.png"
+                    counter+=1
                     grid_pil.save(save_path, "PNG", dpi=(150, 150))
                     total+=1
             total = 0
@@ -801,7 +803,7 @@ def main():
                 # Full training batch:
                 recon_batch = recon.cpu()
                 true_labels = labels.cpu()
-                for recon, label, name_img in zip(recon_batch, true_labels, name_imgs):
+                for recon, label in zip(recon_batch, true_labels):
                     # Dynamic grid layout (auto-fit batch size)
                     grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
                     # Add labels to grid (PIL overlay)
@@ -811,7 +813,8 @@ def main():
                     # TensorBoard: full batch!
                     # SAVE to directory
                     recons_dir = f"{name}_build_emb_test"
-                    save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{name_img}.png"
+                    save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{counter}.png"
+                    counter+=1
                     grid_pil.save(save_path, "PNG", dpi=(150, 150))
                     total += 1
 
@@ -873,7 +876,7 @@ def main():
 
         # Showing some random training images
         dataiter = iter(trainloader)
-        images, labels, name_img = next(dataiter)
+        images, labels= next(dataiter)
         print(' '.join([str(label) for label in labels]))
         print(' '.join(idx_to_class[label.item()] for label in labels))
         imshow(torchvision.utils.make_grid(images))
@@ -1015,7 +1018,7 @@ def main():
         print("Starting Classifier Testing...")
         # Showing some random testing images
         dataiter = iter(testloader)
-        images, labels, name_img = next(dataiter)
+        images, labels = next(dataiter)
         print('GroundTruth: ', ' '.join(idx_to_class[label.item()] for label in labels))
         imshow(torchvision.utils.make_grid(images))
 
@@ -1045,12 +1048,12 @@ def main():
         # again no gradients needed
         with torch.no_grad():
             final = open(f"{name}_predictions.txt","w")
-            final.write(f"name\ttrue\tpredicted\n")
+            final.write(f"true\tpredicted\n")
             for batch, data in enumerate(testloader):
                 total_batch = 0
                 correct_batch = 0
                 images, labels = data[0].to(device), data[1].to(device)
-                names_img = data[2]
+                #names_img = data[2]
                 outputs = net(images)
                 _, predictions = torch.max(outputs, 1)
                 total += labels.size(0)
@@ -1058,8 +1061,8 @@ def main():
                 correct += (predictions == labels).sum().item()
                 correct_batch += (predictions == labels).sum().item()
                 # Correct predictions for each class
-                for label, prediction,name_img in zip(labels, predictions, names_img):
-                    final.write(f"{name_img}\t{label}\t{prediction}\n")
+                for label, prediction in zip(labels, predictions):
+                    final.write(f"{label}\t{prediction}\n")
                     if label == prediction:
                         correct_pred[idx_to_class[int(prediction)]] += 1
                     total_pred[idx_to_class[int(prediction)]] += 1
@@ -1105,12 +1108,12 @@ def main():
         # again no gradients needed
         with torch.no_grad():
             final = open(f"{name}_predictions.txt", "w")
-            final.write(f"name\ttrue\tpredicted\n")
+            final.write(f"true\tpredicted\n")
             for batch, data in enumerate(testloader):
                 total_batch = 0
                 correct_batch = 0
                 images, labels = data[0].to(device), data[1].to(device)
-                names_img = data[2]
+                #names_img = data[2]
                 outputs = net(images)
                 _, predictions = torch.max(outputs, 1)
                 total += labels.size(0)
@@ -1118,8 +1121,8 @@ def main():
                 correct += (predictions == labels).sum().item()
                 correct_batch += (predictions == labels).sum().item()
                 # Correct predictions for each class
-                for label, prediction, name_img in zip(labels, predictions, names_img):
-                    final.write(f"{name_img}\t{label}\t{prediction}\n")
+                for label, prediction in zip(labels, predictions):
+                    final.write(f"{label}\t{prediction}\n")
                     if label == prediction:
                         correct_pred[idx_to_class[int(prediction)]] += 1
                     total_pred[idx_to_class[int(prediction)]] += 1
