@@ -17,8 +17,6 @@ from sklearn.model_selection import train_test_split
 from PIL import Image, ImageDraw, ImageFont
 from Bio.PDB import PDBParser, MMCIFParser, DSSP
 from collections import defaultdict, Counter
-from imblearn.under_sampling import RandomUnderSampler
-rus = RandomUnderSampler(random_state=312)
 parser = PDBParser(QUIET=True)
 
 # Global values
@@ -128,13 +126,12 @@ class Net(nn.Module): # Currently an autoencoder
 
 
 class CustomImageDataset(Dataset):
-    def __init__(self, annotations_file, img_dir, classes, out, transform=None, target_transform=None):
+    def __init__(self, annotations_file, img_dir, classes, transform=None, target_transform=None):
         self.img_labels = pd.read_csv(annotations_file, header=0, sep="\t")
         self.img_dir = img_dir
         self.transform = transform
         self.target_transform = target_transform
         self.classes = classes
-        out = open(out,"w")
     def __len__(self):
         return len(self.img_labels)
     def __getitem__(self, idx):
@@ -157,12 +154,11 @@ class CustomImageDataset(Dataset):
             image = self.transform(image)
         if self.target_transform:
             label = self.target_transform(label)
-        out.write(f"{img_path}\t{label}\n")
         return image, label
 
 
 class FragmentedImageDataset(Dataset):
-    def __init__(self, annotations_file, img_dir, classes, out, transform=None, target_transform=None):
+    def __init__(self, annotations_file, img_dir, classes, transform=None, target_transform=None):
         self.transform = transform
         self.target_transform = target_transform
         self.classes = classes
@@ -170,10 +166,9 @@ class FragmentedImageDataset(Dataset):
         self.img_labels = pd.read_csv(annotations_file, header=0, sep="\t")
         self.img_dir = img_dir
         self.img_list = os.listdir(img_dir)
-        out = open(out,"w")
         # BUILD flattened list: each fragment = one dataset entry
         self.samples = []  # List of (img_path, label)
-        if f"{name}_build" not in img_dir:
+        if "build" not in img_dir:
             for idx in range(len(self.img_labels)):
                 base_name = self.img_labels.iloc[idx, 0].upper()
                 label_idx = self.img_labels.iloc[idx, 1]
@@ -188,19 +183,12 @@ class FragmentedImageDataset(Dataset):
                     else:
                         label = self.classes["parallel"]
                     self.samples.append((img_path, label))
-                    out.write(f"{img_path}\t{label}\n")
         else:
             for img_file in os.listdir(img_dir):
                 img_path = os.path.join(img_dir, img_file)
-                if "antiparallel" in img_file:
-                    label = self.classes["antiparallel"]
-                else:
-                    label = self.classes["parallel"]
-                #name_img = img_file.split("_")[1:]
-                #name_img = ("_").join(name_img)
-                #name_img = name_img.replace(".png", "")
+                label = img_file.split("_")[0]
+                label = self.classes[label]
                 self.samples.append((img_path, label))
-                out.write(f"{img_path}\t{label}\n")
     def __len__(self):
         return len(self.samples)  # Total fragments across ALL annotations
     def __getitem__(self, idx):
@@ -460,77 +448,66 @@ def main():
         transform = transformL
 
     batch_size = 16
-    if "--fragments" and "--train" in sys.argv:
+    if "--fragments" in sys.argv:
         # Training
         trainset = FragmentedImageDataset(annotations_file=f"{name}_train_set.csv",
-                                          img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
-                                          classes=class_to_idx,
-                                          out=f"{name}_train_set_images.txt",
-                                          transform=transform
-                                          )
+                                      img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
+                                      classes=class_to_idx,
+                                      transform=transform)
 
         print("Classes:", class_to_idx)
         # Validation:
         valset = FragmentedImageDataset(annotations_file=f"{name}_val_set.csv",
-                                        img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
-                                        classes=class_to_idx,
-                                        out=f"{name}_val_set_images.txt",
-                                        transform=transform)
+                                     img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
+                                     classes=class_to_idx,
+                                     transform=transform)
         # Testing
         testset = FragmentedImageDataset(annotations_file=f"{name}_test_set.csv",
-                                         img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
-                                         classes=class_to_idx,
-                                         out=f"{name}_test_set_images.txt",
-                                         transform=transform
-                                         )
+                                     img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
+                                     classes=class_to_idx,
+                                     transform=transform)
     else:
-        if "--train" in sys.argv:
-            # Training
-            trainset = CustomImageDataset(annotations_file=f"{name}_train_set.csv",
-                                          img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
-                                          classes=class_to_idx,
-                                          out=f"{name}_train_set_images.txt",
-                                          transform=transform
-                                          )
+        # Training
+        trainset = CustomImageDataset(annotations_file=f"{name}_train_set.csv",
+                                      img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
+                                      classes=class_to_idx,
+                                      transform=transform)
 
-            print("Classes:", class_to_idx)
-            # Validation
-            valset = CustomImageDataset(annotations_file=f"{name}_val_set.csv",
-                                        img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
-                                        classes=class_to_idx,
-                                        out=f"{name}_val_set_images.txt",
-                                        transform=transform
-                                        )
-            # Testing
-            testset = CustomImageDataset(annotations_file=f"{name}_test_set.csv",
-                                         img_dir=os.path.join(os.getcwd(), f"{name}_imgs/connected"),
-                                         classes=class_to_idx,
-                                         out=f"{name}_test_set_images.txt",
-                                         transform=transform
-                                         )
+        print("Classes:", class_to_idx)
+        # Validation
+        valset = CustomImageDataset(annotations_file=f"{name}_val_set.csv",
+                                     img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
+                                     classes=class_to_idx,
+                                     transform=transform)
+        # Testing
+        testset = CustomImageDataset(annotations_file=f"{name}_test_set.csv",
+                                     img_dir=os.path.join(os.getcwd(),f"{name}_imgs/connected"),
+                                     classes=class_to_idx,
+                                     transform=transform)
+
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
+    valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
+
+    print("=" * 50)
+    print("DATASET SIZES:")
+    print(f"Train dataset: {len(trainset)} samples")
+    print(f"Validation dataset: {len(valset)} samples")
+    print(f"Test dataset:  {len(testset)} samples")
+    print(f"Train batches: {len(trainloader)} batches")
+    print(f"Validation batches: {len(valloader)} batches")
+    print(f"Test batches:  {len(testloader)} batches")
+    print("=" * 50)
+
+    # Check first batch
+    images, labels = next(iter(trainloader))
+    print("FIRST BATCH SHAPES:")
+    print(f"Images: {images.shape}")
+    print(f"Labels: {labels.shape}")
+    print(f"Image range: [{images.min():.3f}, {images.max():.3f}]")
+    print("=" * 50)
+
     if "--train" in sys.argv:
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
-        valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2)
-        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
-
-        print("=" * 50)
-        print("DATASET SIZES:")
-        print(f"Train dataset: {len(trainset)} samples")
-        print(f"Validation dataset: {len(valset)} samples")
-        print(f"Test dataset:  {len(testset)} samples")
-        print(f"Train batches: {len(trainloader)} batches")
-        print(f"Validation batches: {len(valloader)} batches")
-        print(f"Test batches:  {len(testloader)} batches")
-        print("=" * 50)
-
-        # Check first batch
-        images, labels = next(iter(trainloader))
-        print("FIRST BATCH SHAPES:")
-        print(f"Images: {images.shape}")
-        print(f"Labels: {labels.shape}")
-        print(f"Image range: [{images.min():.3f}, {images.max():.3f}]")
-        print("=" * 50)
-
         print("Starting Decoder Training...")
         # Showing some random training images
         dataiter = iter(trainloader)
@@ -654,200 +631,189 @@ def main():
         print('Finished Decoder Training')
 
 
-        # Showing some random testing images
-        print("Starting Decoder Testing...")
-        dataiter = iter(testloader)
-        images, labels = next(dataiter)
-        print('GroundTruth: ',' '.join(idx_to_class[label.item()] for label in labels))
-        imshow(torchvision.utils.make_grid(images))
-        # Loading trained model
-        if "--color" in sys.argv:
-            channels_num = 3
-        else:
-            channels_num = 1
-        net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128), reconstruct=True)
-        PATH = f'./{name}_decoder_net.pth'
-        net.load_state_dict(torch.load(PATH, weights_only=True))
-        net = net.to(device)
+    # Showing some random testing images
+    print("Starting Decoder Testing...")
+    dataiter = iter(testloader)
+    images, labels = next(dataiter)
+    print('GroundTruth: ',' '.join(idx_to_class[label.item()] for label in labels))
+    imshow(torchvision.utils.make_grid(images))
+    # Loading trained model
+    if "--color" in sys.argv:
+        channels_num = 3
+    else:
+        channels_num = 1
+    net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128), reconstruct=True)
+    PATH = f'./{name}_decoder_net.pth'
+    net.load_state_dict(torch.load(PATH, weights_only=True))
+    net = net.to(device)
 
-        # Reconstructions
-        images = images.to(device)
-        labels = labels.to(device)
-        recons = net(images)
-        print(net)
+    # Reconstructions
+    images = images.to(device)
+    labels = labels.to(device)
+    recons = net(images)
+    print(net)
 
-        with torch.no_grad():
-            total = 0
-            for batch, data in enumerate(testloader):
-                images, labels = data[0].to(device), data[1].to(device)
-                total += len(images)
-                recon = net(images)
-                batch_size = images.shape[0]  # e.g. 32
-                # Full batch: orig|recon pairs
-                orig_batch = images.cpu()
-                recon_batch = recon.cpu()
-                comparisons = torch.cat([orig_batch, recon_batch], dim=3)  # [32, 1, 128, 256]
+    with torch.no_grad():
+        total = 0
+        for batch, data in enumerate(testloader):
+            images, labels = data[0].to(device), data[1].to(device)
+            total += len(images)
+            recon = net(images)
+            batch_size = images.shape[0]  # e.g. 32
+            # Full batch: orig|recon pairs
+            orig_batch = images.cpu()
+            recon_batch = recon.cpu()
+            comparisons = torch.cat([orig_batch, recon_batch], dim=3)  # [32, 1, 128, 256]
+            # Dynamic grid layout (auto-fit batch size)
+            cols = int(np.ceil(np.sqrt(batch_size)))  # ~6x6 for batch=32
+            cols = batch_size // cols
+            grid = vutils.make_grid(comparisons, nrow=cols, normalize=True, scale_each=True)
+            # Get ALL predictions
+            true_labels = labels.cpu()
+            # Add labels to grid (PIL overlay)
+            grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
+            grid_pil = Image.fromarray(grid_np)
+            draw = ImageDraw.Draw(grid_pil)
+            try:
+                font = ImageFont.truetype("arial", 20)
+            except:
+                font = ImageFont.load_default()
+            cell_w = grid_pil.width // cols
+            cell_h = grid_pil.height // cols
+            for j in range(batch_size):
+                row, col = divmod(j, cols)
+                x = col * cell_w + cell_w // 2 - 30
+                y = row * cell_h + cell_h - 20
+                label_text = f"T:{idx_to_class[int(true_labels[j])]}"
+                draw.text((x, y), label_text, fill='black', font=font, stroke_width=0.1, stroke_fill='black')
+            # Back to tensor
+            grid_with_labels = torch.from_numpy(np.array(grid_pil)).permute(2, 0, 1).float() / 255.0
+            # TensorBoard: full batch!
+            writer.add_image(f"Batch: {batch}", grid_with_labels, batch)
+            # SAVE to directory
+            batch_dir = f"{name}_recon_grids_test"
+            os.makedirs(batch_dir, exist_ok=True)
+            save_path = f"{batch_dir}/{batch}.png"
+            grid_pil.save(save_path, "PNG", dpi=(150, 150))
+
+    print(f"Finished Decoder Testing on {total} images.")
+
+    print("Rebuilding training images with current best model...")
+    newimgs = f"{name}_build_emb_train"
+    os.makedirs(newimgs, exist_ok=True)
+    newimgs = f"{name}_build_emb_val"
+    os.makedirs(newimgs, exist_ok=True)
+    newimgs = f"{name}_build_emb_test"
+    os.makedirs(newimgs, exist_ok=True)
+
+    with torch.no_grad():
+        total = 0
+        for batch, data in enumerate(trainloader):
+            images, labels = data[0].to(device), data[1].to(device)
+            total += len(images)
+            recon = net(images)
+            batch_size = images.shape[0]  # e.g. 32
+            # Full training batch:
+            recon_batch = recon.cpu()
+            true_labels = labels.cpu()
+            for recon, label in zip(recon_batch, true_labels):
                 # Dynamic grid layout (auto-fit batch size)
-                cols = int(np.ceil(np.sqrt(batch_size)))  # ~6x6 for batch=32
-                cols = batch_size // cols
-                grid = vutils.make_grid(comparisons, nrow=cols, normalize=True, scale_each=True)
-                # Get ALL predictions
-                true_labels = labels.cpu()
+                grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
                 # Add labels to grid (PIL overlay)
                 grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
                 grid_pil = Image.fromarray(grid_np)
-                draw = ImageDraw.Draw(grid_pil)
-                try:
-                    font = ImageFont.truetype("arial", 20)
-                except:
-                    font = ImageFont.load_default()
-                cell_w = grid_pil.width // cols
-                cell_h = grid_pil.height // cols
-                for j in range(batch_size):
-                    row, col = divmod(j, cols)
-                    x = col * cell_w + cell_w // 2 - 30
-                    y = row * cell_h + cell_h - 20
-                    label_text = f"T:{idx_to_class[int(true_labels[j])]}"
-                    draw.text((x, y), label_text, fill='black', font=font, stroke_width=0.1, stroke_fill='black')
                 # Back to tensor
-                grid_with_labels = torch.from_numpy(np.array(grid_pil)).permute(2, 0, 1).float() / 255.0
                 # TensorBoard: full batch!
-                writer.add_image(f"Batch: {batch}", grid_with_labels, batch)
                 # SAVE to directory
-                batch_dir = f"{name}_recon_grids_test"
-                os.makedirs(batch_dir, exist_ok=True)
-                save_path = f"{batch_dir}/{batch}.png"
+                recons_dir = f"{name}_build_emb_train"
+                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
                 grid_pil.save(save_path, "PNG", dpi=(150, 150))
-
-        print(f"Finished Decoder Testing on {total} images.")
-
-        print("Rebuilding training images with current best model...")
-        newimgs = f"{name}_build_emb_train"
-        os.makedirs(newimgs, exist_ok=True)
-        newimgs = f"{name}_build_emb_val"
-        os.makedirs(newimgs, exist_ok=True)
-        newimgs = f"{name}_build_emb_test"
-        os.makedirs(newimgs, exist_ok=True)
-
-        with torch.no_grad():
-            total = 0
-            for batch, data in enumerate(trainloader):
-                images, labels = data[0].to(device), data[1].to(device)
-                total += len(images)
-                recon = net(images)
-                batch_size = images.shape[0]  # e.g. 32
-                # Full training batch:
-                recon_batch = recon.cpu()
-                true_labels = labels.cpu()
-                for recon, label in zip(recon_batch, true_labels):
-                    # Dynamic grid layout (auto-fit batch size)
-                    grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
-                    # Add labels to grid (PIL overlay)
-                    grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
-                    grid_pil = Image.fromarray(grid_np)
-                    # Back to tensor
-                    # TensorBoard: full batch!
-                    # SAVE to directory
-                    recons_dir = f"{name}_build_emb_train"
-                    save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
-                    grid_pil.save(save_path, "PNG", dpi=(150, 150))
-                    total+=1
-            total = 0
-            for batch, data in enumerate(valloader):
-                images, labels = data[0].to(device), data[1].to(device)
-                total += len(images)
-                recon = net(images)
-                batch_size = images.shape[0]  # e.g. 32
-                # Full training batch:
-                recon_batch = recon.cpu()
-                true_labels = labels.cpu()
-                for recon, label in zip(recon_batch, true_labels):
-                    # Dynamic grid layout (auto-fit batch size)
-                    grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
-                    # Add labels to grid (PIL overlay)
-                    grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
-                    grid_pil = Image.fromarray(grid_np)
-                    # Back to tensor
-                    # TensorBoard: full batch!
-                    # SAVE to directory
-                    recons_dir = f"{name}_build_emb_val"
-                    save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
-                    grid_pil.save(save_path, "PNG", dpi=(150, 150))
-                    total+=1
-            total = 0
-            for batch, data in enumerate(valloader):
-                images, labels = data[0].to(device), data[1].to(device)
-                total += len(images)
-                recon = net(images)
-                batch_size = images.shape[0]  # e.g. 32
-                # Full training batch:
-                recon_batch = recon.cpu()
-                true_labels = labels.cpu()
-                for recon, label in zip(recon_batch, true_labels):
-                    # Dynamic grid layout (auto-fit batch size)
-                    grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
-                    # Add labels to grid (PIL overlay)
-                    grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
-                    grid_pil = Image.fromarray(grid_np)
-                    # Back to tensor
-                    # TensorBoard: full batch!
-                    # SAVE to directory
-                    recons_dir = f"{name}_build_emb_test"
-                    save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
-                    grid_pil.save(save_path, "PNG", dpi=(150, 150))
-                    total += 1
+                total+=1
+        total = 0
+        for batch, data in enumerate(valloader):
+            images, labels = data[0].to(device), data[1].to(device)
+            total += len(images)
+            recon = net(images)
+            batch_size = images.shape[0]  # e.g. 32
+            # Full training batch:
+            recon_batch = recon.cpu()
+            true_labels = labels.cpu()
+            for recon, label in zip(recon_batch, true_labels):
+                # Dynamic grid layout (auto-fit batch size)
+                grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
+                # Add labels to grid (PIL overlay)
+                grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
+                grid_pil = Image.fromarray(grid_np)
+                # Back to tensor
+                # TensorBoard: full batch!
+                # SAVE to directory
+                recons_dir = f"{name}_build_emb_val"
+                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
+                grid_pil.save(save_path, "PNG", dpi=(150, 150))
+                total+=1
+        total = 0
+        for batch, data in enumerate(valloader):
+            images, labels = data[0].to(device), data[1].to(device)
+            total += len(images)
+            recon = net(images)
+            batch_size = images.shape[0]  # e.g. 32
+            # Full training batch:
+            recon_batch = recon.cpu()
+            true_labels = labels.cpu()
+            for recon, label in zip(recon_batch, true_labels):
+                # Dynamic grid layout (auto-fit batch size)
+                grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
+                # Add labels to grid (PIL overlay)
+                grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
+                grid_pil = Image.fromarray(grid_np)
+                # Back to tensor
+                # TensorBoard: full batch!
+                # SAVE to directory
+                recons_dir = f"{name}_build_emb_test"
+                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
+                grid_pil.save(save_path, "PNG", dpi=(150, 150))
+                total += 1
 
 
+    print("Starting Classifier Training...")
 
     if "--train" in sys.argv:
-        print("Starting Classifier Training...")
         if "--fragments" in sys.argv:
             # Training
             trainset = FragmentedImageDataset(annotations_file=f"{name}_train_set.csv",
-                                              img_dir=os.path.join(os.getcwd(), f"{name}_build_emb_train"),
+                                              img_dir = f"{name}_build_emb_train",
                                               classes=class_to_idx,
-                                              out=f"{name}_train_set_images.txt",
-                                              transform=transform
-                                              )
+                                              transform=transform)
 
             print("Classes:", class_to_idx)
             # Validation:
             valset = FragmentedImageDataset(annotations_file=f"{name}_val_set.csv",
-                                            img_dir=os.path.join(os.getcwd(), f"{name}_build_emb_val"),
+                                            img_dir=f"{name}_build_emb_val",
                                             classes=class_to_idx,
-                                            out=f"{name}_val_set_images.txt",
                                             transform=transform)
             # Testing
             testset = FragmentedImageDataset(annotations_file=f"{name}_test_set.csv",
-                                             img_dir=os.path.join(os.getcwd(), f"{name}_build_emb_test"),
+                                             img_dir=f"{name}_build_emb_test",
                                              classes=class_to_idx,
-                                             out=f"{name}_test_set_images.txt",
-                                             transform=transform
-                                             )
+                                             transform=transform)
         else:
             # Training
             trainset = CustomImageDataset(annotations_file=f"{name}_train_set.csv",
-                                          img_dir=os.path.join(os.getcwd(), f"{name}_build_emb_train"),
+                                          img_dir=f"{name}_build_emb_train",
                                           classes=class_to_idx,
-                                          out=f"{name}_train_set_images.txt",
-                                          transform=transform
-                                          )
+                                          transform=transform)
 
             print("Classes:", class_to_idx)
             # Validation
             valset = CustomImageDataset(annotations_file=f"{name}_val_set.csv",
-                                        img_dir=os.path.join(os.getcwd(), f"{name}_build_emb_val"),
+                                        img_dir=f"{name}_build_emb_val",
                                         classes=class_to_idx,
-                                        out=f"{name}_val_set_images.txt",
-                                        transform=transform
-                                        )
+                                        transform=transform)
             # Testing
             testset = CustomImageDataset(annotations_file=f"{name}_test_set.csv",
-                                         img_dir=os.path.join(os.getcwd(), f"{name}_build_emb_test"),
+                                         img_dir=f"{name}_build_emb_test",
                                          classes=class_to_idx,
-                                         out=f"{name}_test_set_images.txt",
-                                         transform=transform
-                                         )
+                                         transform=transform)
 
         trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
         valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2)
@@ -914,7 +880,7 @@ def main():
                 global_step += 1
                 # Print loss after every 10 mini-batches
                 if i % 10 == 9:
-                    print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 10:.3f}')
+                    print(f'[{epoch + 1}, {i + 1:5d}] tail lloss: {running_loss / 10:.3f}')
                     running_loss = 0.0
             # Log original vs reconstructed images in Tensorboard per epoch
             net.eval()
@@ -1052,72 +1018,11 @@ def main():
             except:
                 print(f"No representing entries for {classname:5s} in testset.")
 
-    else:
-        class_list = sorted(df["orient"].unique())
-        idx_to_class = {i: c for i, c in enumerate(class_list)}
-        class_to_idx = {c: i for i, c in idx_to_class.items()}
-        print(class_to_idx)
-        testset = TMBImageDataset(annotations_file="tmb_list.txt",
-                                         img_dir=os.path.join(os.getcwd(), f"tmb_imgs/connected"),
-                                         classes=class_to_idx,
-                                         out=f"{name}_tmb_images.txt",
-                                         transform=transform
-                                         )
-        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
-        PATH = f'./{name}_classifier_net.pth'
-        # Convolutional Neural Network
-        if "--color" in sys.argv:
-            channels_num = 3
-        else:
-            channels_num = 1
-        net = Net(input_channels=channels_num, num_classes=2, image_size=(128,128), reconstruct=False)
-        net.load_state_dict(torch.load(PATH, weights_only=True))
-        print(net)
-        net = net.to(device)
-        # Whole dataset predictions (per class and overall)
-        correct = 0
-        total = 0
-        correct_pred = {classname: 0 for classname in class_list}
-        total_pred = {classname: 0 for classname in class_list}
-        print(correct_pred)
-        # again no gradients needed
-        with torch.no_grad():
-            final = open(f"{name}_predictions.txt", "w")
-            final.write(f"true\tpredicted\n")
-            for batch, data in enumerate(testloader):
-                total_batch = 0
-                correct_batch = 0
-                images, labels = data[0].to(device), data[1].to(device)
-                #names_img = data[2]
-                outputs = net(images)
-                _, predictions = torch.max(outputs, 1)
-                total += labels.size(0)
-                total_batch += labels.size(0)
-                correct += (predictions == labels).sum().item()
-                correct_batch += (predictions == labels).sum().item()
-                # Correct predictions for each class
-                for label, prediction in zip(labels, predictions):
-                    final.write(f"{label}\t{prediction}\n")
-                    if label == prediction:
-                        correct_pred[idx_to_class[int(prediction)]] += 1
-                    total_pred[idx_to_class[int(prediction)]] += 1
-                acc = correct_batch / total_batch  # Correct predictions in a testing batch
-                writer.add_scalar("Classification/Accuracy_test", acc, batch + 1)
-        print(f'Accuracy of the network on the {total} tmb images: {100 * correct // total} %')
-        # Accuracy for each class
-        for classname, correct_count in correct_pred.items():
-            try:
-                accuracy = 100 * float(correct_count) / total_pred[classname]
-                print(f'Accuracy for class: {classname:5s} is {accuracy:.1f} %')
-            except:
-                print(f"No representing entries for {classname:5s} in testset.")
-
-
 
 if __name__ == "__main__":
     main()
     for file in os.listdir(os.getcwd()):
-        if "log" in file:
+        if ",19" in file:
             os.rename(file, f'results_{name}_model.txt')
-        #elif "log" in file:
-        #    os.remove(file)
+        elif "log" in file:
+            os.remove(file)
