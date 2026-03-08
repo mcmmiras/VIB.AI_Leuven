@@ -115,13 +115,13 @@ def generateImages(file, pdb_dir, fragmented=False):
         os.mkdir(f"{name}_imgs/connected")
         os.mkdir(f"{name}_pymol_sessions")
     for idx in data.index:
-        code = data.iloc[idx, 0].lower()
-        #if code not in positive:
-        #    pass
-        #cc_chains = data.at[idx,"CC_chains"].split(",")
-        #if len(list(set(cc_chains))) != int(data.at[idx,"helixCount"]):
-        #    continue
-        #label = data.iloc[idx, 1]
+        code = data.iloc[idx, 0].upper()
+        if code not in positive:
+            pass
+        cc_chains = data.at[idx,"CC_chains"].split(",")
+        if len(list(set(cc_chains))) != int(data.at[idx,"helixCount"]):
+            continue
+        label = data.at[idx, "helixCount"]
         projected = list()
         coordsCA = list()
         chainsRes = list()
@@ -211,20 +211,23 @@ def generateImages(file, pdb_dir, fragmented=False):
                     chains.append(c)
 
             # loop over all chain pairs, but always in original order
-            for chain1, chain2 in itertools.combinations(chains, 2):
+            #for chain1, chain2 in itertools.combinations(chains, 2):
+            if chains:
+                chainDict = defaultdict(dict)
                 used_residues_pair = []  # only for this pair
                 # pair-specific view, but keeping global order
                 pair_projected_str = []
                 pair_residues_list = []
                 for p, r in zip(projected_str, residues_list):
                     c = r.split("_")[1]
-                    if c in (chain1, chain2):
+                    #if c in (chain1, chain2):
+                    if c in chains:
                         pair_projected_str.append(p)
                         pair_residues_list.append(r)
                 # scan in order
                 for index in range(len(pair_projected_str)):
-                    chain1resi = list()
-                    chain2resi = list()
+                    #chain1resi = list()
+                    #chain2resi = list()
                     counter = pair_projected_str[index][0]
                     if pair_residues_list[index] in used_residues_pair:
                         continue
@@ -243,14 +246,15 @@ def generateImages(file, pdb_dir, fragmented=False):
                             continue
 
                         chain = r.split("_")[1]
+                        if chain not in chainDict.keys():
+                            chainDict[chain] = {"residues": []}
+                        chainDict[chain]["residues"].append(r)
                         # Skip if already 2 chains used
-                        if chain not in used_chains and len(set(used_chains)) == 2:
+                        if chain not in used_chains and len(set(used_chains)) == len(chains):
                             continue
 
                         # STOP if this chain would exceed 8 residues
-                        if chain == chain1 and len(chain1resi) >= 8:
-                            continue
-                        if chain == chain2 and len(chain2resi) >= 8:
+                        if len(chainDict[chain]["residues"]) >= 8:
                             continue
 
                         # Add residue
@@ -258,20 +262,11 @@ def generateImages(file, pdb_dir, fragmented=False):
                         proj_residues_list.append(r)
                         used_chains.append(chain)
 
-                        # Track per-chain residues
-                        if chain == chain1:
-                            chain1resi.append(r)  # Track residue ID, not coord
-                        elif chain == chain2:
-                            chain2resi.append(r)
-
-                        # Stop if BOTH chains hit 8 (optional: early termination)
-                        if len(chain1resi) >= 8 and len(chain2resi) >= 8:
-                            break
 
                     # Filters (unchanged)
                     if len(proj_residues_list) < 16:
                         continue
-                    if len(set(used_chains)) != 2:
+                    if len(set(used_chains)) != len(chains):
                         continue
                     distance = calculateDistance(projected_list, proj_residues_list)
                     if distance > 12:
@@ -292,6 +287,7 @@ def generateImages(file, pdb_dir, fragmented=False):
 
                     # Fragment accepted - proceed with PCA, plotting...
                     # here proj_residues_list is still in original order
+                    chainDict = defaultdict(dict)
                     projected = np.array(projected_list)
                     proj_residues = np.array(proj_residues_list)
                     # Re-orient fragments
@@ -301,7 +297,7 @@ def generateImages(file, pdb_dir, fragmented=False):
                     used_residues_pair.extend(proj_residues)
                     fragments += 1
 
-                    print(f"Fragment from {code}_{fragments} ({chain1}-{chain2}):", proj_residues)
+                    #print(f"Fragment from {code}_{fragments} ({chain1}-{chain2}):", proj_residues)
                     pymol_session.write(f"cmd.select('{fragments}', None)\n")
                     for resi in proj_residues:
                         num = resi.split("_")[0]
@@ -331,7 +327,7 @@ def generateImages(file, pdb_dir, fragmented=False):
                     ax.axis("off")
                     ax.set_xlim(x_min, x_max)
                     #ax.set_xlim(y_min, y_max)
-                    ax.set_ylim(y_min, y_max)  # 12.8 Å in each direction -> 5 px/Å
+                    ax.set_ylim(z_min, z_max)  # 12.8 Å in each direction -> 5 px/Å
                     # Get residue names for this fragment (in same order as projected)
                     resnames = proj_residues
                     #types_in_fragment = [residue_types.get(resname, 'unknown') for resname in resnames]
@@ -370,13 +366,13 @@ def generateImages(file, pdb_dir, fragmented=False):
                                 if chain2 not in coords_dict.keys():
                                     coords_dict[chain2]["residues"] = list()
                                 coords_dict[chain1]["residues"].append(projected[i])
-                                #ax.scatter(projected[:, 0], projected[:, 1], c="black", marker=".", s=3)
+                                ax.scatter(projected[:, 0], projected[:, 2], c="black", marker=".", s=0.8)
                                 if chain1 == chain2:
                                     if int(num1)+1 == int(num2):
-                                        ax.plot(projected[i:i + 2, 0], projected[i:i + 2, 1], color="black", linewidth=0.5)
+                                        ax.plot(projected[i:i + 2, 0], projected[i:i + 2, 2], color="black", linewidth=0.5)
                         orientation = calculateOrientation(coords_dict)
-                        projected_path = f"{name}_imgs/projected/{code.upper()}_{fragments}_{orientation}.png"
-                        connected_path = f"{name}_imgs/connected/{code.upper()}_{fragments}_{orientation}.png"
+                        projected_path = f"{name}_imgs/projected/{code}_{fragments}_{label}.png"
+                        connected_path = f"{name}_imgs/connected/{code}_{fragments}_{label}.png"
                         fig.savefig(connected_path, transparent=True)
                         plt.close(fig)
                         print(coords_dict)
@@ -399,6 +395,6 @@ def generateImages(file, pdb_dir, fragmented=False):
 
 if "--embeddings" in sys.argv:
     generateImages(file=source,
-                   pdb_dir="/media/mari/Data/vib_leuven/datasets/cc_membprot/pdb_files",
-                   #pdb_dir="/media/mari/Data/vib_leuven/datasets/cc_sasa/biomols",
+                   #pdb_dir="/media/mari/Data/vib_leuven/datasets/cc_membprot/pdb_files",
+                   pdb_dir="/media/mari/Data/vib_leuven/datasets/cc_sasa/biomols",
                    fragmented=False)

@@ -115,12 +115,12 @@ def generateImages(file, pdb_dir, fragmented=False):
         os.mkdir(f"{name}_imgs/connected")
         os.mkdir(f"{name}_pymol_sessions")
     for idx in data.index:
-        code = data.iloc[idx, 0].lower()
+        code = data.iloc[idx, 0].upper()
         #if code not in positive:
         #    pass
-        #cc_chains = data.at[idx,"CC_chains"].split(",")
-        #if len(list(set(cc_chains))) != int(data.at[idx,"helixCount"]):
-        #    continue
+        cc_chains = data.at[idx,"CC_chains"].split(",")
+        if len(list(set(cc_chains))) != int(data.at[idx,"helixCount"]):
+            continue
         #label = data.iloc[idx, 1]
         projected = list()
         coordsCA = list()
@@ -374,9 +374,10 @@ def generateImages(file, pdb_dir, fragmented=False):
                                 if chain1 == chain2:
                                     if int(num1)+1 == int(num2):
                                         ax.plot(projected[i:i + 2, 0], projected[i:i + 2, 1], color="black", linewidth=0.5)
-                        orientation = calculateOrientation(coords_dict)
-                        projected_path = f"{name}_imgs/projected/{code.upper()}_{fragments}_{orientation}.png"
-                        connected_path = f"{name}_imgs/connected/{code.upper()}_{fragments}_{orientation}.png"
+                        #orientation = calculateOrientation(coords_dict)
+                        #projected_path = f"{name}_imgs/projected/{code}_{fragments}_{orientation}.png"
+                        #connected_path = f"{name}_imgs/connected/{code}_{fragments}_{orientation}.png"
+                        connected_path = f"{name}_imgs/connected/{code.upper()}_{fragments}_cc.png"
                         fig.savefig(connected_path, transparent=True)
                         plt.close(fig)
                         print(coords_dict)
@@ -399,6 +400,6 @@ def generateImages(file, pdb_dir, fragmented=False):
 
 if "--embeddings" in sys.argv:
     generateImages(file=source,
-                   pdb_dir="/media/mari/Data/vib_leuven/datasets/cc_membprot/pdb_files",
-                   #pdb_dir="/media/mari/Data/vib_leuven/datasets/cc_sasa/biomols",
+                   #pdb_dir="/media/mari/Data/vib_leuven/datasets/cc_membprot/pdb_files",
+                   pdb_dir="/media/mari/Data/vib_leuven/datasets/cc_sasa/biomols",
                    fragmented=False)
