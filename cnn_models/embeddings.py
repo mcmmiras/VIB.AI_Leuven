@@ -212,8 +212,6 @@ def generateImages(file, pdb_dir, fragmented=False):
 
             # loop over all chain pairs, but always in original order
             for chain1, chain2 in itertools.combinations(chains, 2):
-                chain1resi = list()
-                chain2resi = list()
                 used_residues_pair = []  # only for this pair
                 # pair-specific view, but keeping global order
                 pair_projected_str = []
@@ -225,6 +223,8 @@ def generateImages(file, pdb_dir, fragmented=False):
                         pair_residues_list.append(r)
                 # scan in order
                 for index in range(len(pair_projected_str)):
+                    chain1resi = list()
+                    chain2resi = list()
                     counter = pair_projected_str[index][0]
                     if pair_residues_list[index] in used_residues_pair:
                         continue
@@ -316,22 +316,22 @@ def generateImages(file, pdb_dir, fragmented=False):
                     # center 12.8 Å window on fragment
                     x_center = projected[:, 0].mean()
                     y_center = projected[:, 1].mean()
-                    #z_center = projected[:, 2].mean()
+                    z_center = projected[:, 2].mean()
                     x_min = x_center - ANGSTROM_SPAN/2
                     x_max = x_center + ANGSTROM_SPAN/2
                     y_min = y_center - ANGSTROM_SPAN/2
                     y_max = y_center + ANGSTROM_SPAN/2
-                    #z_min = z_center - ANGSTROM_SPAN/2
-                    #z_max = z_center + ANGSTROM_SPAN/2
+                    z_min = z_center - ANGSTROM_SPAN/2
+                    z_max = z_center + ANGSTROM_SPAN/2
                     dpi = TARGET_PIXELS  # 1 inch = 128 px
                     fig = plt.figure(figsize=(1, 1), dpi=dpi)  # 128×128 px output [web:24][web:26]
                     # axes that fill the whole figure: [left, bottom, width, height] in 0–1
                     ax = fig.add_axes([0, 0, 1, 1])
                     ax.set_aspect("equal")
                     ax.axis("off")
-                    ax.set_ylim(y_min, y_max)
+                    ax.set_xlim(x_min, x_max)
                     #ax.set_xlim(y_min, y_max)
-                    ax.set_xlim(x_min, x_max)  # 12.8 Å in each direction -> 5 px/Å
+                    ax.set_ylim(y_min, y_max)  # 12.8 Å in each direction -> 5 px/Å
                     # Get residue names for this fragment (in same order as projected)
                     resnames = proj_residues
                     #types_in_fragment = [residue_types.get(resname, 'unknown') for resname in resnames]
@@ -370,7 +370,7 @@ def generateImages(file, pdb_dir, fragmented=False):
                                 if chain2 not in coords_dict.keys():
                                     coords_dict[chain2]["residues"] = list()
                                 coords_dict[chain1]["residues"].append(projected[i])
-                                ax.scatter(projected[:, 0], projected[:, 1], c="black", marker=".", s=0.8)
+                                #ax.scatter(projected[:, 0], projected[:, 1], c="black", marker=".", s=3)
                                 if chain1 == chain2:
                                     if int(num1)+1 == int(num2):
                                         ax.plot(projected[i:i + 2, 0], projected[i:i + 2, 1], color="black", linewidth=0.5)

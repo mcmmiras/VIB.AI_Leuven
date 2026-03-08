@@ -172,16 +172,18 @@ class FragmentedImageDataset(Dataset):
             for idx in range(len(self.img_labels)):
                 base_name = self.img_labels.iloc[idx, 0].upper()
                 label_idx = self.img_labels.iloc[idx, 1]
-                label = self.classes[label_idx]
+                #label = self.classes[label_idx]
                 # Find ALL matching fragments
                 matching_imgs = [f for f in self.img_list if base_name in f]
                 # Add EACH fragment as separate sample with SAME label
                 for img_file in matching_imgs:
                     img_path = os.path.join(img_dir, img_file)
-                    if "antiparallel" in img_file:
-                        label = self.classes["antiparallel"]
-                    else:
-                        label = self.classes["parallel"]
+                    if "dimer" in img_file:
+                        label = self.classes["dimer"]
+                    elif "trimer" in img_file:
+                        label = self.classes["trimer"]
+                    elif "tetramer" in img_file:
+                        label = self.classes["tetramer"]
                     self.samples.append((img_path, label))
         else:
             for img_file in os.listdir(img_dir):
@@ -219,10 +221,12 @@ class TMBImageDataset(Dataset):
         self.samples = []  # List of (img_path, label)
         for img_file in os.listdir(img_dir):
             img_path = os.path.join(img_dir, img_file)
-            if "antiparallel" in img_file:
-                label = self.classes["antiparallel"]
-            else:
-                label = self.classes["parallel"]
+            if "dimer" in img_file:
+                label = self.classes["dimer"]
+            elif "trimer" in img_file:
+                label = self.classes["trimer"]
+            elif "tetramer" in img_file:
+                label = self.classes["tetramer"]
             name_img = img_file
             name_img = name_img.replace(".png", "")
             self.samples.append((img_path, label))
@@ -407,22 +411,24 @@ def main():
             df,
             test_size=0.3,
             random_state=312,  # for reproducibility
-            stratify=df['orient']  # ensures orient distribution is similar
+            stratify=df['helixCount']  # ensures orient distribution is similar
         )
         val_df, test_df = train_test_split(
             temp_df,
             test_size=0.5,
             random_state=312,
-            stratify=temp_df['orient']
+            stratify=temp_df['helixCount']
         )
-        class_list = sorted(df["orient"].unique())
+        class_list = sorted(df["helixCount"].unique())
         idx_to_class = {i: c for i, c in enumerate(class_list)}
         class_to_idx = {c: i for i, c in idx_to_class.items()}
         # Check
         print("Train set class distribution:")
-        print(train_df['orient'].value_counts(normalize=True))
+        print(train_df['helixCount'].value_counts(normalize=True))
+        print("\nValidation set class distribution:")
+        print(val_df['helixCount'].value_counts(normalize=True))
         print("\nTest set class distribution:")
-        print(test_df['orient'].value_counts(normalize=True))
+        print(test_df['helixCount'].value_counts(normalize=True))
         # Saving train/test datasets
         train_df.to_csv(f"{name}_train_set.csv", index=False, sep="\t")
         val_df.to_csv(f"{name}_val_set.csv", index=False, sep="\t")
@@ -516,7 +522,7 @@ def main():
             channels_num = 3
         else:
             channels_num = 1
-        net = Net(input_channels=channels_num, num_classes=2, image_size=(128,128), reconstruct=True)
+        net = Net(input_channels=channels_num, num_classes=len(class_list), image_size=(128,128), reconstruct=True)
         print(net)
         net = net.to(device)
         # Loss functions
@@ -637,7 +643,7 @@ def main():
         channels_num = 3
     else:
         channels_num = 1
-    net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128), reconstruct=True)
+    net = Net(input_channels=channels_num, num_classes=len(class_list), image_size=(128, 128), reconstruct=True)
     PATH = f'./{name}_decoder_net.pth'
     net.load_state_dict(torch.load(PATH, weights_only=True))
     net = net.to(device)
@@ -826,7 +832,7 @@ def main():
             channels_num = 3
         else:
             channels_num = 1
-        net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128),reconstruct=False)
+        net = Net(input_channels=channels_num, num_classes=len(class_list), image_size=(128, 128),reconstruct=False)
         print(net)
         net = net.to(device)
         # Loss functions
@@ -967,7 +973,7 @@ def main():
             channels_num = 3
         else:
             channels_num = 1
-        net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128), reconstruct=False)
+        net = Net(input_channels=channels_num, num_classes=len(class_list), image_size=(128, 128), reconstruct=False)
         PATH = f'./{name}_classifier_net.pth'
         net.load_state_dict(torch.load(PATH, weights_only=True))
         net = net.to(device)
