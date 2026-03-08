@@ -1,6 +1,5 @@
 import sys
 import torch
-from torcheval.metrics.functional import binary_f1_score, multiclass_f1_score
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
@@ -15,7 +14,6 @@ import os
 import pandas as pd
 from sklearn.decomposition import PCA, SparsePCA
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 from PIL import Image, ImageDraw, ImageFont
 from Bio.PDB import PDBParser, MMCIFParser, DSSP
 from collections import defaultdict, Counter
@@ -59,7 +57,6 @@ class Net(nn.Module): # Currently an autoencoder
         super(Net, self).__init__()
         # Convolution + pooling layers
         self.dropout = nn.Dropout(0.5)
-        #self.spatial_dropout = nn.Dropout2d(p=0.5)
         self.conv1 = nn.Conv2d(input_channels, 16, 4, stride=2, padding=1)
         #self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(16, 32, 4, stride=2, padding=1)
@@ -87,15 +84,12 @@ class Net(nn.Module): # Currently an autoencoder
         #x = self.pool(F.relu(self.conv2(x)))
         #x = self.pool(F.relu(self.conv3(x)))
         x = F.relu(self.conv1(x))
-        #x = self.spatial_dropout(x)
         x = F.relu(self.conv2(x))
-        #x = self.spatial_dropout(x)
         x = F.relu(self.conv3(x))
         x = torch.flatten(x, 1)  # flatten all dimensions except batch
         x = F.relu(self.fc1(x))
         x = self.dropout(x) # Drop neurons
-        #x = F.relu(self.fc2(x)) # Latent vector
-        x = self.fc2(x) # Latent vector without activation
+        x = self.fc2(x) # Latent vector
         return x
 
     def decoder(self, x):
@@ -107,17 +101,18 @@ class Net(nn.Module): # Currently an autoencoder
         x = F.relu(self.iconv3(x))
         x = F.relu(self.iconv2(x))
         #x = self.upsample(x)
-        x = torch.tanh(self.iconv1(x))  # sigmoid for image output [0,1]
+        x = torch.sigmoid(self.iconv1(x))  # sigmoid for image output [0,1]
         return x
 
     def forward(self, x):
         latent = self.encoder(x)
         # Classification task (CrossEntropyLoss will be calculated)
-        logits = self.fc3(latent)  # Logits
-        # Reconstruction task (MSELoss will be calculated)
-        recon = self.decoder(latent)
-
-        return logits, recon
+        if self.reconstruct:
+            # Reconstruction task (MSELoss will be calculated)
+            values = self.decoder(latent)
+        else:
+            values = self.fc3(latent)  # Logits
+        return values
 
     def _compute_linear_input(self, image_size, input_channels):
         x = torch.zeros(1, input_channels, image_size[0], image_size[1])
@@ -183,6 +178,10 @@ class FragmentedImageDataset(Dataset):
                 # Add EACH fragment as separate sample with SAME label
                 for img_file in matching_imgs:
                     img_path = os.path.join(img_dir, img_file)
+                    if "cc.png" in img_file:
+                        label = self.classes["cc"]
+                    else:
+                        label = self.classes["tmb"]
                     self.samples.append((img_path, label))
         else:
             for img_file in os.listdir(img_dir):
@@ -205,6 +204,45 @@ class FragmentedImageDataset(Dataset):
         if self.target_transform:
             label = self.target_transform(label)
         return image, label
+
+class TMBImageDataset(Dataset):
+    def __init__(self, annotations_file, img_dir, classes, out, transform=None, target_transform=None):
+        self.transform = transform
+        self.target_transform = target_transform
+        self.classes = classes
+        # READ annotations
+        self.img_labels = open(annotations_file,"r").read().splitlines()
+        self.img_dir = img_dir
+        self.img_list = os.listdir(img_dir)
+        out = open(out,"w")
+        # BUILD flattened list: each fragment = one dataset entry
+        self.samples = []  # List of (img_path, label)
+        for img_file in os.listdir(img_dir):
+            img_path = os.path.join(img_dir, img_file)
+            if "cc.png" in img_file:
+                label = self.classes["cc"]
+            else:
+                label = self.classes["tmb"]
+            name_img = img_file
+            name_img = name_img.replace(".png", "")
+            self.samples.append((img_path, label))
+            out.write(f"{img_path}\t{label}\n")
+    def __len__(self):
+        return len(self.samples)  # Total fragments across ALL annotations
+    def __getitem__(self, idx):
+        img_path, label, name_img = self.samples[idx]
+        # Load single image
+        if "--color" in sys.argv:
+            image = Image.open(img_path).convert("RGB")  # ✅ compatible with ToTensor() in the transformer
+        else:
+            image = Image.open(img_path).convert("L")
+        label = torch.tensor(label, dtype=torch.long)
+        if self.transform:
+            image = self.transform(image)
+        if self.target_transform:
+            label = self.target_transform(label)
+        return image, label
+
 
 def generateImages(file, pdb_dir, classes, fragmented=False):
     global name
@@ -367,34 +405,31 @@ def main():
     if f"{name}_train_set.csv" not in os.listdir(rootdir):
         train_df, temp_df = train_test_split(
             df,
-            test_size=0.2,
+            test_size=0.3,
             random_state=312,  # for reproducibility
-            stratify=df['orient']  # ensures orient distribution is similar
+            stratify=df['type']  # ensures orient distribution is similar
         )
         val_df, test_df = train_test_split(
             temp_df,
             test_size=0.5,
             random_state=312,
-            stratify=temp_df['orient']
+            stratify=temp_df['type']
         )
-        class_list = sorted(df["orient"].unique())
+        class_list = sorted(df["type"].unique())
         idx_to_class = {i: c for i, c in enumerate(class_list)}
         class_to_idx = {c: i for i, c in idx_to_class.items()}
         # Check
         print("Train set class distribution:")
-        print(train_df['orient'].value_counts(normalize=True))
+        print(train_df['type'].value_counts(normalize=True))
+        print("\nValidation set class distribution:")
+        print(val_df['type'].value_counts(normalize=True))
         print("\nTest set class distribution:")
-        print(test_df['orient'].value_counts(normalize=True))
+        print(test_df['type'].value_counts(normalize=True))
         # Saving train/test datasets
         train_df.to_csv(f"{name}_train_set.csv", index=False, sep="\t")
         val_df.to_csv(f"{name}_val_set.csv", index=False, sep="\t")
         test_df.to_csv(f"{name}_test_set.csv", index=False,sep="\t")
 
-    if "--embeddings" in sys.argv:
-        generateImages(file=source,
-                       pdb_dir="/media/mari/Data/vib_leuven/datasets/cc_sasa/biomols",
-                       classes=class_to_idx,
-                       fragmented=False)
     # Transform images to Tensors of normalized range [-1, 1].
     transformRGB = transforms.Compose(
         [transforms.ToTensor(),
@@ -470,7 +505,7 @@ def main():
     print("=" * 50)
 
     if "--train" in sys.argv:
-        print("Starting Autoencoder Training...")
+        print("Starting Decoder Training...")
         # Showing some random training images
         dataiter = iter(trainloader)
         images, labels = next(dataiter)
@@ -487,55 +522,40 @@ def main():
         print(net)
         net = net.to(device)
         # Loss functions
-        ce = nn.CrossEntropyLoss() # Classification task
         mse = nn.MSELoss() # Reconstruction task
         # Optimizer
-        #optimizer = optim.Adam(net.parameters(), lr=1e-3)  # Standard for deep nets
-        optimizer = torch.optim.AdamW(net.parameters(), lr=1e-5, weight_decay=1e-5)  # Decouples weight decay from gradients, directly applied to weights
-
+        optimizer = optim.Adam(net.parameters(), lr=1e-3)  # Standard for deep nets
         # Training of CNN
         global_step = 0
-        global_step_val = 0
         loss_list = list()
 
         # EARLY STOPPING BY LOSS
-        best_val_loss = 100000
-        patience = 10  # Stop after 10 epochs without improvement
+        best_val_loss = 1
+        patience = 15  # Stop after 10 epochs without improvement
         patience_counter = 0
 
-        for epoch in range(200):  # loop over the dataset multiple times
+        for epoch in range(100):  # loop over the dataset multiple times
             net.train()
-            running_loss = 0.0
-            running_cls = 0
-            running_rec = 0
+            running_loss = 0.0      # Reconstruction loss in this case
+            loss_epoch = list()
             for i, data in enumerate(trainloader, 0):
-                global_step += 1
                 # get the inputs; data is a list of [inputs, labels]
                 # Inputs and labels are sent to the GPU at every step
                 inputs, labels = data[0].to(device), data[1].to(device)
                 # zero the parameter gradients
                 optimizer.zero_grad()
                 # forward + backward + optimize
-                logits, recon = net(inputs)
-                loss_cls = ce(logits, labels)
-                #print(mse(logits, labels))
+                recon = net(inputs)
                 loss_rec = mse(recon, inputs)
-                loss = loss_cls + 0.1 * loss_rec
+                loss = loss_rec
+                loss_epoch.append(loss.item())
                 loss.backward()
                 optimizer.step()
                 # Statistics
                 running_loss += loss.item()
-                running_cls += loss_cls.item()
-                running_rec += loss_rec.item()
-                # Predictions in training epoch
-                _, predicted = torch.max(logits, 1)
-                correct_batch = (predicted == labels).sum().item()
-                total_batch = labels.size(0)
-                acc = correct_batch / total_batch  # Correct predictions in a training batch
                 # ---- TensorBoard scalar logging ----
-                writer.add_scalar("Training/Total_loss", loss.item(), global_step)
-                writer.add_scalar("Training/Reconstruction_loss", loss_rec.item(), global_step)
-                writer.add_scalar("Training/Classification_loss", loss_cls.item(), global_step)
+                writer.add_scalar("Reconstruction/Loss_train", loss.item(), global_step)
+                global_step += 1
                 # Print loss after every 10 mini-batches
                 if i % 10 == 9:
                     print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 10:.3f}')
@@ -545,36 +565,12 @@ def main():
             loss_val_epoch = list()
             with torch.no_grad():
                 for batch_idx, data in enumerate(valloader):
-                    global_step_val += 1
                     inputs, labels = data[0].to(device), data[1].to(device)
-                    logits, recon = net(inputs)
-                    loss_cls_val = ce(logits, labels)
-                    """
-                    print(logits.shape, labels.shape)
-                    labelsmse = list()
-                    for num in range(len(labels)):
-                        labelsmse.append([0,0])
-                    for n, l in enumerate(labels):
-                        labelsmse[n][int(l)] = 1
-                    labelsmse = torch.tensor(np.array(labelsmse)).to(device)
-                    print(labelsmse, labelsmse.shape, logits, logits.shape)
-                    mse_class = mse(logits, labelsmse)
-                    """
+                    images = inputs
+                    recon = net(images)
                     loss_rec_val = mse(recon, inputs)
-                    loss = loss_cls_val + 0.4 * loss_rec_val
-                    loss_val_epoch.append(loss.item()) # Using reconstruction loss as parameter to guide early-stopping
-                    #loss_val_epoch.append(loss.item()) # Using reconstruction loss as parameter to guide early-stopping
-                    # Predictions on validation batches
-                    _, predicted = torch.max(logits, 1)
-                    correct_val = (predicted == labels).sum().item()
-                    total_val = labels.size(0)
-                    acc = correct_val / total_val
-                    writer.add_scalar("Validation/Reconstruction_loss", loss_rec_val.item(), global_step_val)
-                    writer.add_scalar("Validation/Classification_loss", loss_cls_val.item(), global_step_val)
-                    #writer.add_scalar("Validation/Classification_MSEloss", mse_class.item(), global_step_val)
-                    writer.add_scalar("Validation/Classification_accuracy", acc, global_step_val)
-                    writer.add_scalar("Validation/Total_loss", loss.item(), global_step_val)
-                    acc = correct_val / total_val  # Correct predictions in a validation epoch
+                    loss_val_epoch.append(loss_rec_val.item())
+                    writer.add_scalar("Reconstruction/Loss_val", loss_rec_val.item(), global_step)
                     if batch_idx == 0:
                         batch_size = images.shape[0]  # e.g. 32
                         # Full batch: orig|recon pairs
@@ -586,8 +582,7 @@ def main():
                         cols = batch_size // cols
                         grid = vutils.make_grid(comparisons, nrow=cols, normalize=True, scale_each=True)
                         # Get ALL predictions
-                        pred_labels = torch.argmax(logits, dim=1).cpu().numpy()[0]
-                        true_labels = labels.cpu()[0]
+                        true_labels = labels.cpu()
                         # Add labels to grid (PIL overlay)
                         grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
                         grid_pil = Image.fromarray(grid_np)
@@ -598,11 +593,12 @@ def main():
                             font = ImageFont.load_default()
                         cell_w = grid_pil.width // cols
                         cell_h = grid_pil.height // cols
-                        row, col = 1,1
-                        x = col * cell_w + cell_w // 2 - 30
-                        y = row * cell_h + cell_h - 20
-                        label_text = f"T:{idx_to_class[int(true_labels)]} P:{idx_to_class[int(pred_labels)]}"
-                        draw.text((x, y), label_text, fill='black', font=font, stroke_width=0.1, stroke_fill='black')
+                        for j in range(batch_size):
+                            row, col = divmod(j, cols)
+                            x = col * cell_w + cell_w // 2 - 30
+                            y = row * cell_h + cell_h - 20
+                            label_text = f"T:{idx_to_class[int(true_labels[j])]}"
+                            draw.text((x, y), label_text, fill='black', font=font, stroke_width=0.1, stroke_fill='black')
                         # Back to tensor
                         grid_with_labels = torch.from_numpy(np.array(grid_pil)).permute(2, 0, 1).float() / 255.0
                         # TensorBoard: full batch!
@@ -613,11 +609,12 @@ def main():
                         save_path = f"{epoch_dir}/{epoch}.png"
                         grid_pil.save(save_path, "PNG", dpi=(150, 150))
 
+            loss_list.append(sum(loss_epoch) / len(loss_epoch))
             loss_val = np.mean(loss_val_epoch)
             if loss_val < best_val_loss:
                 best_val_loss = loss_val
                 patience_counter = 0
-                PATH = f'./{name}_autoencoder_net.pth'
+                PATH = f'./{name}_decoder_net.pth'
                 torch.save(net.state_dict(), PATH)
                 print(f"New best validation loss: {best_val_loss:.3f}")
             else:
@@ -625,14 +622,14 @@ def main():
                 print(f"No improvement. Patience: {patience_counter}/{patience}")
 
             if patience_counter >= patience:
-                print(f"Early stopping at epoch {epoch} (best validation loss: {best_val_loss:.3f})")
+                print(f"Early stopping at epoch {epoch + 1} (best validation loss: {best_val_loss:.3f})")
                 break  # EXIT THE LOOP
 
-        print('Finished Autoencoder Training')
+        print('Finished Decoder Training')
 
 
     # Showing some random testing images
-    print("Starting Autoencoder Testing...")
+    print("Starting Decoder Testing...")
     dataiter = iter(testloader)
     images, labels = next(dataiter)
     print('GroundTruth: ',' '.join(idx_to_class[label.item()] for label in labels))
@@ -643,58 +640,33 @@ def main():
     else:
         channels_num = 1
     net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128), reconstruct=True)
-    PATH = f'./{name}_autoencoder_net.pth'
+    PATH = f'./{name}_decoder_net.pth'
     net.load_state_dict(torch.load(PATH, weights_only=True))
     net = net.to(device)
 
-    # Predictions
+    # Reconstructions
     images = images.to(device)
     labels = labels.to(device)
-    outputs, recons = net(images)
-    _, predicted = torch.max(outputs, 1)
-    print('Predicted: ',' '.join(idx_to_class[label.item()] for label in labels))
+    recons = net(images)
     print(net)
 
-    correct = 0
-    total = 0
-    correct_pred = {classname: 0 for classname in class_list}
-    total_pred = {classname: 0 for classname in class_list}
-    y_pred = list()
-    y_true = list()
-    y_logits = list()
-    y_softmax = list()
     with torch.no_grad():
+        total = 0
         for batch, data in enumerate(testloader):
             images, labels = data[0].to(device), data[1].to(device)
-            outputs, recon = net(images)
-            _, predictions = torch.max(outputs, 1)
-            y_pred.extend(predictions.cpu().numpy())
-            y_true.extend(labels.cpu().numpy())
-            y_logits.extend(np.round(outputs.cpu().numpy(),decimals=3))
-            softmaxed = nn.functional.softmax(outputs, dim=1)
-            y_softmax.extend(np.round(softmaxed.cpu().numpy(),decimals=3))
-            total += labels.size(0)
-            correct += (predictions == labels).sum().item()
-            total_batch = labels.size(0)
-            correct_batch = (predictions == labels).sum().item()
-            for label, prediction in zip(labels, predictions):
-                if label == prediction:
-                    correct_pred[idx_to_class[int(prediction)]] += 1
-                total_pred[idx_to_class[int(prediction)]] += 1
-            acc = correct_batch / total_batch # Accuracy over testing batch
-            writer.add_scalar("Testing/Classification_accuracy", acc, batch+1)
-
+            total += len(images)
+            recon = net(images)
+            batch_size = images.shape[0]  # e.g. 32
             # Full batch: orig|recon pairs
             orig_batch = images.cpu()
             recon_batch = recon.cpu()
-            true_labels = labels.cpu().numpy()
-            pred_labels = predictions.cpu().numpy()
             comparisons = torch.cat([orig_batch, recon_batch], dim=3)  # [32, 1, 128, 256]
             # Dynamic grid layout (auto-fit batch size)
             cols = int(np.ceil(np.sqrt(batch_size)))  # ~6x6 for batch=32
             cols = batch_size // cols
             grid = vutils.make_grid(comparisons, nrow=cols, normalize=True, scale_each=True)
             # Get ALL predictions
+            true_labels = labels.cpu()
             # Add labels to grid (PIL overlay)
             grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
             grid_pil = Image.fromarray(grid_np)
@@ -705,53 +677,344 @@ def main():
                 font = ImageFont.load_default()
             cell_w = grid_pil.width // cols
             cell_h = grid_pil.height // cols
-            for j in range(total_batch):
+            for j in range(batch_size):
                 row, col = divmod(j, cols)
                 x = col * cell_w + cell_w // 2 - 30
                 y = row * cell_h + cell_h - 20
-                label_text = f"T:{idx_to_class[int(true_labels[j])]} P:{idx_to_class[int(pred_labels[j])]}"
+                label_text = f"T:{idx_to_class[int(true_labels[j])]}"
                 draw.text((x, y), label_text, fill='black', font=font, stroke_width=0.1, stroke_fill='black')
             # Back to tensor
             grid_with_labels = torch.from_numpy(np.array(grid_pil)).permute(2, 0, 1).float() / 255.0
             # TensorBoard: full batch!
-            writer.add_image(f"Batch: {batch+1}", grid_with_labels, batch)
+            writer.add_image(f"Batch: {batch}", grid_with_labels, batch)
             # SAVE to directory
             batch_dir = f"{name}_recon_grids_test"
             os.makedirs(batch_dir, exist_ok=True)
-            save_path = f"{batch_dir}/{batch+1}.png"
+            save_path = f"{batch_dir}/{batch}.png"
             grid_pil.save(save_path, "PNG", dpi=(150, 150))
 
-    print(f'Accuracy of the network on the {total} test images: {100 * correct // total} %')
-    # Accuracy for each class
-    for classname, correct_count in correct_pred.items():
-        try:
-            accuracy = 100 * float(correct_count) / total_pred[classname]
-            print(f'Accuracy for class: {classname:5s} is {accuracy:.1f} %')
-        except:
-            print(f"No representing entries for {classname:5s} in testset.")
+    print(f"Finished Decoder Testing on {total} images.")
 
-    print(f"Finished Autoencoder Testing on {total} images.")
+    print("Rebuilding training images with current best model...")
+    newimgs = f"{name}_build_emb_train"
+    os.makedirs(newimgs, exist_ok=True)
+    newimgs = f"{name}_build_emb_val"
+    os.makedirs(newimgs, exist_ok=True)
+    newimgs = f"{name}_build_emb_test"
+    os.makedirs(newimgs, exist_ok=True)
 
-    print("Statistical details\n","="*50)
-    y_true = torch.tensor(y_true)
-    y_pred = torch.tensor(y_pred)
-    print("Classes and assigned labels:")
-    for key,val in class_to_idx.items():
-        print(f"{key}: {val}")
-    cm = confusion_matrix(y_true, y_pred)
-    cm_display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_to_idx.keys())
-    cm_display.plot()
-    plt.savefig(f"{name}_confusion_matrix.png")
-    plt.show()
+    with torch.no_grad():
+        total = 0
+        for batch, data in enumerate(trainloader):
+            images, labels = data[0].to(device), data[1].to(device)
+            total += len(images)
+            recon = net(images)
+            batch_size = images.shape[0]  # e.g. 32
+            # Full training batch:
+            recon_batch = recon.cpu()
+            true_labels = labels.cpu()
+            for recon, label in zip(recon_batch, true_labels):
+                # Dynamic grid layout (auto-fit batch size)
+                grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
+                # Add labels to grid (PIL overlay)
+                grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
+                grid_pil = Image.fromarray(grid_np)
+                # Back to tensor
+                # TensorBoard: full batch!
+                # SAVE to directory
+                recons_dir = f"{name}_build_emb_train"
+                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
+                grid_pil.save(save_path, "PNG", dpi=(150, 150))
+                total+=1
+        total = 0
+        for batch, data in enumerate(valloader):
+            images, labels = data[0].to(device), data[1].to(device)
+            total += len(images)
+            recon = net(images)
+            batch_size = images.shape[0]  # e.g. 32
+            # Full training batch:
+            recon_batch = recon.cpu()
+            true_labels = labels.cpu()
+            for recon, label in zip(recon_batch, true_labels):
+                # Dynamic grid layout (auto-fit batch size)
+                grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
+                # Add labels to grid (PIL overlay)
+                grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
+                grid_pil = Image.fromarray(grid_np)
+                # Back to tensor
+                # TensorBoard: full batch!
+                # SAVE to directory
+                recons_dir = f"{name}_build_emb_val"
+                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
+                grid_pil.save(save_path, "PNG", dpi=(150, 150))
+                total+=1
+        total = 0
+        for batch, data in enumerate(valloader):
+            images, labels = data[0].to(device), data[1].to(device)
+            total += len(images)
+            recon = net(images)
+            batch_size = images.shape[0]  # e.g. 32
+            # Full training batch:
+            recon_batch = recon.cpu()
+            true_labels = labels.cpu()
+            for recon, label in zip(recon_batch, true_labels):
+                # Dynamic grid layout (auto-fit batch size)
+                grid = vutils.make_grid(recon, nrow=1, normalize=True, scale_each=True)
+                # Add labels to grid (PIL overlay)
+                grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
+                grid_pil = Image.fromarray(grid_np)
+                # Back to tensor
+                # TensorBoard: full batch!
+                # SAVE to directory
+                recons_dir = f"{name}_build_emb_test"
+                save_path = f"{recons_dir}/{idx_to_class[int(label)]}_{total}.png"
+                grid_pil.save(save_path, "PNG", dpi=(150, 150))
+                total += 1
 
-    if len(class_list) == 2:
-        print("F1-score",binary_f1_score(y_pred, y_true))
-    else:
-        print("F1-score",multiclass_f1_score(y_pred, y_true, num_classes=len(class_list), average='micro'))
-        print("F1-score",multiclass_f1_score(y_pred, y_true, num_classes=len(class_list), average='macro'))
 
-    #for logit, soft, pred, true in zip(y_logits,y_softmax,y_pred,y_true):
-    #    print(logit, soft, pred, true)
+    print("Starting Classifier Training...")
+
+    if "--train" in sys.argv:
+        if "--fragments" in sys.argv:
+            # Training
+            trainset = FragmentedImageDataset(annotations_file=f"{name}_train_set.csv",
+                                              img_dir = f"{name}_build_emb_train",
+                                              classes=class_to_idx,
+                                              transform=transform)
+
+            print("Classes:", class_to_idx)
+            # Validation:
+            valset = FragmentedImageDataset(annotations_file=f"{name}_val_set.csv",
+                                            img_dir=f"{name}_build_emb_val",
+                                            classes=class_to_idx,
+                                            transform=transform)
+            # Testing
+            testset = FragmentedImageDataset(annotations_file=f"{name}_test_set.csv",
+                                             img_dir=f"{name}_build_emb_test",
+                                             classes=class_to_idx,
+                                             transform=transform)
+        else:
+            # Training
+            trainset = CustomImageDataset(annotations_file=f"{name}_train_set.csv",
+                                          img_dir=f"{name}_build_emb_train",
+                                          classes=class_to_idx,
+                                          transform=transform)
+
+            print("Classes:", class_to_idx)
+            # Validation
+            valset = CustomImageDataset(annotations_file=f"{name}_val_set.csv",
+                                        img_dir=f"{name}_build_emb_val",
+                                        classes=class_to_idx,
+                                        transform=transform)
+            # Testing
+            testset = CustomImageDataset(annotations_file=f"{name}_test_set.csv",
+                                         img_dir=f"{name}_build_emb_test",
+                                         classes=class_to_idx,
+                                         transform=transform)
+
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
+        valloader = torch.utils.data.DataLoader(valset, batch_size=batch_size, shuffle=False, num_workers=2)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
+
+        # Showing some random training images
+        dataiter = iter(trainloader)
+        images, labels = next(dataiter)
+        print(' '.join([str(label) for label in labels]))
+        print(' '.join(idx_to_class[label.item()] for label in labels))
+        imshow(torchvision.utils.make_grid(images))
+
+        # Convolutional Neural Network
+        if "--color" in sys.argv:
+            channels_num = 3
+        else:
+            channels_num = 1
+        net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128),reconstruct=False)
+        print(net)
+        net = net.to(device)
+        # Loss functions
+        ce = nn.CrossEntropyLoss()  # Classification task
+        # Optimizer
+        optimizer = optim.Adam(net.parameters(), lr=1e-3)  # Standard for deep nets
+        # Training of CNN
+        global_step = 0
+        loss_list = list()
+        # EARLY STOPPING BY LOSS
+        best_val_loss = 1
+        patience = 10  # Stop after 10 epochs without improvement
+        patience_counter = 0
+
+        for epoch in range(100):  # loop over the dataset multiple times
+            net.train()
+            running_loss = 0.0
+            running_cls = 0
+            correct = 0
+            total = 0
+            correct_val = 0
+            total_val = 0
+            loss_epoch = list()
+            for i, data in enumerate(trainloader, 0):
+                # get the inputs; data is a list of [inputs, labels]
+                # Inputs and labels are sent to the GPU at every step
+                inputs, labels = data[0].to(device), data[1].to(device)
+                # zero the parameter gradients
+                optimizer.zero_grad()
+                # forward + backward + optimize
+                logits = net(inputs)
+                loss_cls = ce(logits, labels)
+                loss = loss_cls
+                loss_epoch.append(loss.item())
+                loss.backward()
+                optimizer.step()
+                # Statistics
+                running_loss += loss.item()
+                running_cls += loss_cls.item()
+                # Predictions in training epoch
+                _, predicted = torch.max(logits, 1)
+                correct += (predicted == labels).sum().item()
+                total += labels.size(0)
+                # ---- TensorBoard scalar logging ----
+                writer.add_scalar("Classification/Loss_train", loss.item(), global_step)
+                global_step += 1
+                # Print loss after every 10 mini-batches
+                if i % 10 == 9:
+                    print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 10:.3f}')
+                    running_loss = 0.0
+            # Log original vs reconstructed images in Tensorboard per epoch
+            net.eval()
+            loss_val_epoch = list()
+            with torch.no_grad():
+                for batch_idx, data in enumerate(valloader):
+                    inputs, labels = data[0].to(device), data[1].to(device)
+                    images = inputs
+                    logits = net(images)
+                    _, predicted = torch.max(logits, 1)
+                    loss_cls_val = ce(logits, labels)
+                    loss_val_epoch.append(loss_cls_val.item())
+                    writer.add_scalar("Classification/Loss_val", loss_cls_val.item(), global_step)
+                    correct_val += (predicted == labels).sum().item()
+                    total_val += labels.size(0)
+                    if batch_idx == 0:
+                        batch_size = images.shape[0]  # e.g. 32
+                        # Full batch: orig|recon pairs
+                        """
+                        orig_batch = images.cpu()
+                        recon_batch = recon.cpu()
+                        comparisons = torch.cat([orig_batch, recon_batch], dim=3)  # [32, 1, 128, 256]
+                        # Dynamic grid layout (auto-fit batch size)
+                        cols = int(np.ceil(np.sqrt(batch_size)))  # ~6x6 for batch=32
+                        cols = batch_size // cols
+                        grid = vutils.make_grid(comparisons, nrow=cols, normalize=True, scale_each=True)
+                        # Get ALL predictions
+                        pred_labels = torch.argmax(logits, dim=1).cpu().numpy()
+                        true_labels = labels.cpu()
+                        # Add labels to grid (PIL overlay)
+                        grid_np = grid.permute(1, 2, 0).mul(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
+                        grid_pil = Image.fromarray(grid_np)
+                        draw = ImageDraw.Draw(grid_pil)
+                        try:
+                            font = ImageFont.truetype("arial", 20)
+                        except:
+                            font = ImageFont.load_default()
+                        cell_w = grid_pil.width // cols
+                        cell_h = grid_pil.height // cols
+                        for j in range(batch_size):
+                            row, col = divmod(j, cols)
+                            x = col * cell_w + cell_w // 2 - 30
+                            y = row * cell_h + cell_h - 20
+                            label_text = f"T:{idx_to_class[int(true_labels[j])]} P:{idx_to_class[int(pred_labels[j])]}"
+                            draw.text((x, y), label_text, fill='black', font=font, stroke_width=0.1,
+                                      stroke_fill='black')
+                        # Back to tensor
+                        grid_with_labels = torch.from_numpy(np.array(grid_pil)).permute(2, 0, 1).float() / 255.0
+                        # TensorBoard: full batch!
+                        writer.add_image(f"Epoch: {epoch}", grid_with_labels, epoch)
+                        # SAVE to directory
+                        epoch_dir = f"recon_grids_val/"
+                        os.makedirs(epoch_dir, exist_ok=True)
+                        save_path = f"{epoch_dir}/{epoch}.png"
+                        grid_pil.save(save_path, "PNG", dpi=(150, 150))
+                        """
+
+            loss_list.append(sum(loss_epoch) / len(loss_epoch))
+            acc = correct / total  # Correct predictions in a training epoch
+            acc_val = correct_val / total_val
+            writer.add_scalar("Classification/Accuracy_train", acc, epoch)
+            writer.add_scalar("Classification/Accuracy_val", acc_val, epoch)
+            loss_val = np.mean(loss_val_epoch)
+            if loss_val < best_val_loss:
+                best_val_loss = loss_val
+                patience_counter = 0
+                PATH = f'./{name}_classifier_net.pth'
+                torch.save(net.state_dict(), PATH)
+                print(f"New best validation loss: {best_val_loss:.3f}")
+            else:
+                patience_counter += 1
+                print(f"No improvement. Patience: {patience_counter}/{patience}")
+
+            if patience_counter >= patience:
+                print(f"Early stopping at epoch {epoch + 1} (best validation loss: {best_val_loss:.3f})")
+                break  # EXIT THE LOOP
+
+        print('Finished Classifier Training')
+
+        print("Starting Classifier Testing...")
+        # Showing some random testing images
+        dataiter = iter(testloader)
+        images, labels = next(dataiter)
+        print('GroundTruth: ', ' '.join(idx_to_class[label.item()] for label in labels))
+        imshow(torchvision.utils.make_grid(images))
+
+        # Loading trained model
+        if "--color" in sys.argv:
+            channels_num = 3
+        else:
+            channels_num = 1
+        net = Net(input_channels=channels_num, num_classes=2, image_size=(128, 128), reconstruct=False)
+        PATH = f'./{name}_classifier_net.pth'
+        net.load_state_dict(torch.load(PATH, weights_only=True))
+        net = net.to(device)
+
+        # Predictions
+        images = images.to(device)
+        labels = labels.to(device)
+        outputs = net(images)
+        _, predicted = torch.max(outputs, 1)
+        print('Predicted: ', ' '.join(idx_to_class[label.item()] for label in labels))
+        print(net)
+
+        # Whole dataset predictions (per class and overall)
+        correct = 0
+        total = 0
+        correct_pred = {classname: 0 for classname in class_list}
+        total_pred = {classname: 0 for classname in class_list}
+        # again no gradients needed
+        with torch.no_grad():
+            for batch, data in enumerate(testloader):
+                total_batch = 0
+                correct_batch = 0
+                images, labels = data[0].to(device), data[1].to(device)
+                outputs = net(images)
+                _, predictions = torch.max(outputs, 1)
+                total += labels.size(0)
+                total_batch += labels.size(0)
+                correct += (predictions == labels).sum().item()
+                correct_batch += (predictions == labels).sum().item()
+                # Correct predictions for each class
+                for label, prediction in zip(labels, predictions):
+                    if label == prediction:
+                        correct_pred[idx_to_class[int(prediction)]] += 1
+                    total_pred[idx_to_class[int(prediction)]] += 1
+                acc = correct_batch / total_batch  # Correct predictions in a testing batch
+                writer.add_scalar("Classification/Accuracy_test", acc, batch + 1)
+        print(f'Accuracy of the network on the {total} test images: {100 * correct // total} %')
+        # Accuracy for each class
+        for classname, correct_count in correct_pred.items():
+            try:
+                accuracy = 100 * float(correct_count) / total_pred[classname]
+                print(f'Accuracy for class: {classname:5s} is {accuracy:.1f} %')
+            except:
+                print(f"No representing entries for {classname:5s} in testset.")
+
 
 if __name__ == "__main__":
     main()
