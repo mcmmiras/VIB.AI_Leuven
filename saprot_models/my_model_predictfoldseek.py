@@ -426,19 +426,19 @@ train_loader_struct, test_loader_struct = pytorch_dataset_dataloader(train_struc
 embedding_dim = all_struct_aware_embs.shape[1]
 
 print("Training on sequence-only embeddings...")
-mlp_seq = MLP(input_dim=embedding_dim)
+mlp_seq = MLP(input_dim=embedding_dim, num_classes=len(class_to_idx.keys()))
 mlp_seq, preds_seq, labels_seq = train_mlp(mlp_seq, train_loader_seq, test_loader_seq, class_weights_seq, lr=1e-3, epochs=20)
 
 print("Training on sequence+3Di embeddings...")
-mlp_struct = MLP(input_dim=embedding_dim)
+mlp_struct = MLP(input_dim=embedding_dim,  num_classes=len(class_to_idx.keys()))
 mlp_struct, preds_struct, labels_struct = train_mlp(mlp_struct, train_loader_struct, test_loader_struct, class_weights_struc,lr=1e-3, epochs=20)
 # MLP model evaluation
 
 print("\nSequence-only classification report:")
-print(classification_report(labels_seq, preds_seq, labels=list(range(2))))
+print(classification_report(labels_seq, preds_seq, labels=list(range(len(class_to_idx.keys())))))
 
 print("\nSequence+3Di classification report:")
-print(classification_report(labels_struct, preds_struct, labels=list(range(2))))
+print(classification_report(labels_struct, preds_struct, labels=list(range(len(class_to_idx.keys())))))
 
 # Additional plots
 # Confusion matrix (true vs predicted labels)
