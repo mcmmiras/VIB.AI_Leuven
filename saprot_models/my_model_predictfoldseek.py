@@ -310,9 +310,9 @@ def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=2
     return model, best_preds, best_labels
 
 def plot_confusion(preds, labels, tag, classes, title="Confusion Matrix"):
-    cm = confusion_matrix(labels, preds, normalize=all)
+    cm = confusion_matrix(labels, preds, normalize="all")
     plt.figure(figsize=(12,10))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
+    sns.heatmap(cm, annot=True, fmt=".2f", cmap="Blues",
                 xticklabels=classes, yticklabels=classes)
     plt.xlabel("Predicted")
     plt.ylabel("True")
