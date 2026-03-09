@@ -57,6 +57,7 @@ def dssp_labels(pdb_id, pdb_path):
     print("\npdb:", pdb_id,"residues:", len(dssp))
     # Obtain SS labels with DSSP
     annotated_chains = [key[0] for key in dssp.keys()]
+    """
     for key in dssp.keys():
         chain_id, res_id = key
         if chain_id not in chain_options:
@@ -65,6 +66,7 @@ def dssp_labels(pdb_id, pdb_path):
             selected_chain = chain_id
         aa = dssp[key][1]          # Amino acid
         ss = dssp[key][2]          # Secondary structure
+    """
     print("\t- Selected chain", selected_chain)
     # DSSP mapping (from string to numerical processable format)
     residue_labels = []
