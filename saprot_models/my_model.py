@@ -100,7 +100,7 @@ def foldseek_labels(pdb_path, selected_chain, labelnum, labels_dssp):
     # Extract the "A" chain from the pdb file and encode it into a struc_seq
     # pLDDT is used to mask low-confidence regions if "plddt_mask" is True. Please set it to True when
     # use AF2 structures for best performance.
-    parsed_seqs = get_struc_seq("/home/mari/scripts/vib_leuven/foldseek", pdb_path, [selected_chain], plddt_mask=False)[selected_chain]
+    parsed_seqs = get_struc_seq("/localdata2/mari/foldseek", pdb_path, [selected_chain], plddt_mask=False)[selected_chain]
     seq, foldseek_seq, combined_seq = parsed_seqs
     combined_seq_masked = "".join([c if c.isupper() else "#" for c in combined_seq])
     print(f"\tInput lengths before selecting only helical residues:")
