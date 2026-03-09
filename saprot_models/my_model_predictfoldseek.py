@@ -154,14 +154,14 @@ def foldseek_labels(pdb_path, selected_chain, labelnum, labels_dssp):
 # Load pre-trained SaProt models directly
 # Load SaProt small model
 def saprot_struc_model():
-    tokenizer_struct = AutoTokenizer.from_pretrained("westlake-repl/SaProt_35M_AF2", force_download=True)
-    saprot_struct = AutoModelForMaskedLM.from_pretrained("westlake-repl/SaProt_35M_AF2", force_download=True)
+    tokenizer_struct = AutoTokenizer.from_pretrained("westlake-repl/SaProt_35M_AF2", force_download=False)
+    saprot_struct = AutoModelForMaskedLM.from_pretrained("westlake-repl/SaProt_35M_AF2", force_download=False)
     return tokenizer_struct, saprot_struct
 
 # Load SaProt small model (trained on sequence only)
 def saprot_seq_model():
-    tokenizer_seq = AutoTokenizer.from_pretrained("westlake-repl/SaProt_35M_AF2_seqOnly", force_download=True)
-    saprot_seq = AutoModelForMaskedLM.from_pretrained("westlake-repl/SaProt_35M_AF2_seqOnly", force_download=True)
+    tokenizer_seq = AutoTokenizer.from_pretrained("westlake-repl/SaProt_35M_AF2_seqOnly", force_download=False)
+    saprot_seq = AutoModelForMaskedLM.from_pretrained("westlake-repl/SaProt_35M_AF2_seqOnly", force_download=False)
     return tokenizer_seq, saprot_seq
 
 def residue_emb_seq(device, combined_seq_masked):
