@@ -24,6 +24,7 @@ from collections import Counter
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print("\n\n")
+all_labels = list()
 # Annotate secondary structure with DSSP
 def dssp_labels(pdb_id, pdb_path):
     numeric_label = []
@@ -66,6 +67,7 @@ def dssp_labels(pdb_id, pdb_path):
         ss = dssp[key][2]          # Secondary structure
     print("\t- Selected chain", selected_chain)
     """
+    selected_chain = "A"
     # DSSP mapping (from string to numerical processable format)
     residue_labels = []
     residue_keys = []
@@ -386,10 +388,18 @@ for pdb in pdbs.index:
         all_struct_aware_embs.append(ele)
     for ele in foldseek_seq:
         all_labels_num.append(ele)
-
+        if ele not in all_labels:
+            all_labels.append(ele)
+print(all_labels)
+idx_to_class = {i: c for i, c in enumerate(all_labels)}
+class_to_idx = {c: i for i, c in idx_to_class.items()}
+print(class_to_idx)
+all_labels_map = list()
+for ele in all_labels_num:
+    all_labels_map.append(class_to_idx[ele])
 all_seq_embs = np.array(all_seq_embs)
 all_struct_aware_embs = np.array(all_struct_aware_embs)
-all_labels_num = np.array(all_labels_num)
+all_labels_num = np.array(all_labels_map)
 # Consistency check
 print("\nChecking all inputs:\n==========================================================================")
 if all_seq_embs.shape[0] != all_labels_num.shape[0]:
