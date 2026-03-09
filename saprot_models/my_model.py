@@ -1,3 +1,5 @@
+import os
+
 from Bio.PDB import PDBParser, MMCIFParser, DSSP
 from Bio.PDB.PDBIO import PDBIO
 from foldseek_util import get_struc_seq
@@ -25,7 +27,7 @@ print("\n\n")
 # Annotate secondary structure with DSSP
 def dssp_labels(pdb_id, pdb_path):
     numeric_label = []
-    annotated = pd.read_csv("/media/mari/Data/vib_leuven/datasets/cc_membprot/annotated_ccs.csv",header=0, sep="\t")
+    annotated = pd.read_csv(os.path.join(os.getcwd(),"annotated_ccs.csv"),header=0, sep="\t")
     annotated = annotated.set_index("pdb")
     cc_check = True
     if pdb_id in annotated.index:
@@ -145,14 +147,14 @@ def foldseek_labels(pdb_path, selected_chain, labelnum, labels_dssp):
 # Load pre-trained SaProt models directly
 # Load SaProt small model
 def saprot_struc_model():
-    tokenizer_struct = AutoTokenizer.from_pretrained("westlake-repl/SaProt_35M_AF2", force_download=False)
-    saprot_struct = AutoModelForMaskedLM.from_pretrained("westlake-repl/SaProt_35M_AF2", force_download=False)
+    tokenizer_struct = AutoTokenizer.from_pretrained("westlake-repl/SaProt_35M_AF2", force_download=True)
+    saprot_struct = AutoModelForMaskedLM.from_pretrained("westlake-repl/SaProt_35M_AF2", force_download=True)
     return tokenizer_struct, saprot_struct
 
 # Load SaProt small model (trained on sequence only)
 def saprot_seq_model():
-    tokenizer_seq = AutoTokenizer.from_pretrained("westlake-repl/SaProt_35M_AF2_seqOnly", force_download=False)
-    saprot_seq = AutoModelForMaskedLM.from_pretrained("westlake-repl/SaProt_35M_AF2_seqOnly", force_download=False)
+    tokenizer_seq = AutoTokenizer.from_pretrained("westlake-repl/SaProt_35M_AF2_seqOnly", force_download=True)
+    saprot_seq = AutoModelForMaskedLM.from_pretrained("westlake-repl/SaProt_35M_AF2_seqOnly", force_download=True)
     return tokenizer_seq, saprot_seq
 
 def residue_emb_seq(device, combined_seq_masked):
@@ -337,10 +339,12 @@ errors =  open(f"errors_{sys.argv[1].split('.')[0]}.txt","w")
 all_labels_num = list()
 all_seq_embs = list()
 all_struct_aware_embs = list()
-pdbs = open(sys.argv[1], "r").read().splitlines()
-for pdb in pdbs:
+pdbs = pd.read_csv(os.path.join(os.getcwd(),"cc_tmb.csv"), header=0, sep="\t")
+pdbs = pdbs.set_index("pdb")
+for pdb in pdbs.index:
+    pdb = pdb[:4].lower()
     try:
-        pdb_path = f"/media/mari/Data/vib_leuven/datasets/cc_membprot/pdb_files/{pdb}.pdb"
+        pdb_path = os.path.join(os.getcwd(),"pdb_files",f"{pdb}.pdb")
         pdb_id = pdb
         label_num, selected_chain, labels_dssp = dssp_labels(pdb_id,pdb_path)  # Get true labels with DSSP annotation, labels are converted into numerical
     except:
