@@ -309,11 +309,11 @@ def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=2
         print(f"\tEpoch {epoch + 1}/{epochs} - Test accuracy: {acc:.4f} (best: {best_acc:.4f})")
     return model, best_preds, best_labels
 
-def plot_confusion(preds, labels, tag, title="Confusion Matrix"):
+def plot_confusion(preds, labels, tag, classes, title="Confusion Matrix"):
     cm = confusion_matrix(labels, preds)
     plt.figure(figsize=(6,5))
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
-                xticklabels=["TM","CC"], yticklabels=["TM","CC"])
+                xticklabels=classes, yticklabels=classes)
     plt.xlabel("Predicted")
     plt.ylabel("True")
     plt.title(title)
@@ -442,8 +442,8 @@ print(classification_report(labels_struct, preds_struct, labels=list(range(len(c
 
 # Additional plots
 # Confusion matrix (true vs predicted labels)
-plot_confusion(preds_seq, labels_seq, "seq", title="Sequence-only MLP")
-plot_confusion(preds_struct, labels_struct,"str", title="Sequence+3Di MLP")
+plot_confusion(preds_seq, labels_seq, "seq", class_to_idx.keys(), title="Sequence-only MLP")
+plot_confusion(preds_struct, labels_struct,"str", class_to_index.keys(),title="Sequence+3Di MLP")
 # PCA scatter plot of test embeddings and DSSP SS labels
 PCA_embeddings(test_seq_emb, y_test,"seq",title="Sequence-only embeddings (PCA)")
 PCA_embeddings(test_struct_aware_emb, y_test,"str", title="Sequence+3Di embeddings (PCA)")
