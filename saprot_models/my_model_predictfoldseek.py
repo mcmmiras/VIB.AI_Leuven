@@ -362,6 +362,7 @@ def PCA_embeddings(embeddings, labels, tag, title="Embedding PCA", color_palette
     plt.figure(figsize=(6,5))
     sns.scatterplot(
         x=emb_2d[:,0], y=emb_2d[:,1],
+        hue=labels,
         palette=color_palette,   # geschikt voor meerdere klassen
         s=40, alpha=0.8
     )
