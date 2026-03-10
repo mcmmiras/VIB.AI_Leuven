@@ -130,6 +130,7 @@ def foldseek_labels(pdb_path, selected_chain, labelnum, labels_dssp):
         combined_seq+=f.lower()
     print(seq, foldseek_seq, combined_seq)
     combined_seq_masked = "".join([c if c.isupper() else "#" for c in combined_seq])
+    print(seq, foldseek_seq, combined_seq_masked)
     print(f"\tInput lengths before selecting only helical residues:")
     print(f"\t- seq length: {len(seq)}")
     #print(f"\t- seq: {seq}")
