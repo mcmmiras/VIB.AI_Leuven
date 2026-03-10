@@ -122,7 +122,9 @@ def foldseek_labels(pdb_path, selected_chain, labelnum, labels_dssp):
     # use AF2 structures for best performance.
     parsed_seqs = get_struc_seq("/localdata2/mari/saprot_foldseeklab/foldseek", pdb_path, [selected_chain], plddt_mask=False)[selected_chain]
     seq, foldseek_seq, combined_seq = parsed_seqs
-    foldseek_seq = "".join(["V" if c == "V" else "N" for c in foldseek_seq])
+    print(seq, foldseek_seq)
+    foldseek_seq = "".join(["v" if c == "v" else "n" for c in foldseek_seq])
+    print(seq, foldseek_seq)
     combined_seq = str()
     for s, f in zip(seq, foldseek_seq):
         combined_seq+=s
