@@ -377,6 +377,7 @@ def PCA_embeddings(embeddings, labels, tag, title="Embedding PCA", color_palette
     print(f"DEBUG: {len(embeddings)} total points, unique labels: {unique_labels}")
     for lab in unique_labels:
         mask = (labels == lab)
+        n_points = np.sum(mask)
         print(f"DEBUG: Class '{lab}' has {n_points} points")
         plt.figure(figsize=(6, 5))
         sns.scatterplot(
@@ -501,6 +502,7 @@ plot_confusion(preds_struct, labels_struct,"str", class_to_idx.keys(),title="Seq
 y_test = [idx_to_class[y] for y in y_test]
 PCA_embeddings(test_seq_emb, y_test,"seq",title="Sequence-only embeddings (PCA)")
 PCA_embeddings(test_struct_aware_emb, y_test,"str", title="Sequence+3Di embeddings (PCA)")
+print("HERE")
 for label,val in class_to_idx.items():
     emb_label = list()
     embstr_label = list()
