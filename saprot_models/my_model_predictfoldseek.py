@@ -371,6 +371,19 @@ def PCA_embeddings(embeddings, labels, tag, title="Embedding PCA", color_palette
     plt.tight_layout()
     plt.savefig(f"pca_{sys.argv[1].split('.')[0]}_{tag}.png")
     plt.show()
+    # 2) One plot per class (same coordinates, filtered labels)
+    unique_labels = np.unique(labels)
+    for lab in unique_labels:
+        mask = (labels == lab)
+        plt.figure(figsize=(6, 5))
+        sns.scatterplot(
+            x=emb_2d[mask, 0], y=emb_2d[mask, 1],
+            s=40, alpha=0.8
+        )
+        plt.title(f"{title} – class {lab}")
+        plt.tight_layout()
+        plt.savefig(f"pca_{sys.argv[1].split('.')[0]}_{tag}_class-{lab}.png")
+        plt.show()
 
 
 
