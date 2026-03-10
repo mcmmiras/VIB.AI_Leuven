@@ -26,6 +26,18 @@ from collections import Counter
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print("\n\n")
 all_labels = list()
+
+colors_dict = {
+    0: "red",
+    1: "blue",
+    2: "orange",
+    3: "yellow",
+    4: "purple",
+    5: "black",
+    6: "green",
+    7: "brown",
+    8: "pink",
+}
 # Annotate secondary structure with DSSP
 def dssp_labels(pdb_id, pdb_path):
     numeric_label = []
@@ -344,14 +356,14 @@ def plot_confusion(preds, labels, tag, classes, title="Confusion Matrix"):
     plt.show()
 
 # PCA scatter plot
-def PCA_embeddings(embeddings, labels, tag, title="Embedding PCA"):
+def PCA_embeddings(embeddings, labels, tag, title="Embedding PCA", color_palette = "tab10"):
     pca = PCA(n_components=2)
     emb_2d = pca.fit_transform(embeddings)
     plt.figure(figsize=(6,5))
     sns.scatterplot(
         x=emb_2d[:,0], y=emb_2d[:,1],
         hue=labels,
-        palette="tab10",   # geschikt voor meerdere klassen
+        palette=color_palette,   # geschikt voor meerdere klassen
         s=40, alpha=0.8
     )
     plt.title(title)
@@ -473,7 +485,7 @@ plot_confusion(preds_struct, labels_struct,"str", class_to_idx.keys(),title="Seq
 y_test = [idx_to_class[y] for y in y_test]
 PCA_embeddings(test_seq_emb, y_test,"seq",title="Sequence-only embeddings (PCA)")
 PCA_embeddings(test_struct_aware_emb, y_test,"str", title="Sequence+3Di embeddings (PCA)")
-for label in class_to_idx.keys():
+for label,val in class_to_idx.items():
     emb_label = list()
     embstr_label = list()
     test_label = list()
@@ -482,7 +494,7 @@ for label in class_to_idx.keys():
             test_label.append(l)
             emb_label.append(e)
             embstr_label.append(s)
-    PCA_embeddings(emb_label, test_label, f"seq_{label}", title=f"Sequence-only embeddings (PCA) for class {label}")
-    PCA_embeddings(embstr_label, test_label, f"str_{label}", title=f"Sequence+3Di embeddings (PCA) for class {label}")
+    PCA_embeddings(emb_label, test_label, f"seq_{label}", title=f"Sequence-only embeddings (PCA) for class {label}", color_palette=colors_dict[val])
+    PCA_embeddings(embstr_label, test_label, f"str_{label}", title=f"Sequence+3Di embeddings (PCA) for class {label}", color_palette=colors_dict[val])
 
 
