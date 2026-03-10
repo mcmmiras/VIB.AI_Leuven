@@ -473,4 +473,16 @@ plot_confusion(preds_struct, labels_struct,"str", class_to_idx.keys(),title="Seq
 y_test = [idx_to_class[y] for y in y_test]
 PCA_embeddings(test_seq_emb, y_test,"seq",title="Sequence-only embeddings (PCA)")
 PCA_embeddings(test_struct_aware_emb, y_test,"str", title="Sequence+3Di embeddings (PCA)")
+for label in class_to_idx.keys():
+    emb_label = list()
+    embstr_label = list()
+    test_label = list()
+    for e,l,s in zip(test_seq_emb,y_test, test_struct_aware_emb):
+        if label == l:
+            test_label.append(l)
+            emb_label.append(e)
+            embstr_label.append(s)
+    PCA_embeddings(emb_label, test_label, f"seq_{label}", title=f"Sequence-only embeddings (PCA) for class {label}")
+    PCA_embeddings(embstr_label, test_label, f"str_{label}", title=f"Sequence+3Di embeddings (PCA) for class {label}")
+
 
