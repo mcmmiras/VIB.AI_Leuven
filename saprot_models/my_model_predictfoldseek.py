@@ -110,6 +110,11 @@ def foldseek_labels(pdb_path, selected_chain, labelnum, labels_dssp):
     # use AF2 structures for best performance.
     parsed_seqs = get_struc_seq("/localdata2/mari/saprot_foldseeklab/foldseek", pdb_path, [selected_chain], plddt_mask=False)[selected_chain]
     seq, foldseek_seq, combined_seq = parsed_seqs
+    foldseek_seq = "".join(["V" if c == "V" else "N" for c in foldseek_seq])
+    combined_seq = str()
+    for s, f in zip(seq, foldseek_seq):
+        combined_seq+=s
+        combined_seq+=f
     combined_seq_masked = "".join([c if c.isupper() else "#" for c in combined_seq])
     print(f"\tInput lengths before selecting only helical residues:")
     print(f"\t- seq length: {len(seq)}")
@@ -405,8 +410,6 @@ for pdb in pdbs.index:
     for ele in struct_aware_emb:
         all_struct_aware_embs.append(ele)
     for ele in foldseek_seq:
-        if ele != "V":
-            ele = "N"
         all_labels_num.append(ele)
         if ele not in all_labels:
             all_labels.append(ele)
