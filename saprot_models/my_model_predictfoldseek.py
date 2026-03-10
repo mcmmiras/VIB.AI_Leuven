@@ -470,6 +470,7 @@ print(classification_report(labels_struct, preds_struct, labels=list(range(len(c
 plot_confusion(preds_seq, labels_seq, "seq", class_to_idx.keys(), title="Sequence-only MLP")
 plot_confusion(preds_struct, labels_struct,"str", class_to_idx.keys(),title="Sequence+3Di MLP")
 # PCA scatter plot of test embeddings and DSSP SS labels
+y_test = [idx_to_class[y] for y in y_test]
 PCA_embeddings(test_seq_emb, y_test,"seq",title="Sequence-only embeddings (PCA)")
 PCA_embeddings(test_struct_aware_emb, y_test,"str", title="Sequence+3Di embeddings (PCA)")
 
