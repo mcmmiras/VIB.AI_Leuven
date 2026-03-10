@@ -295,10 +295,10 @@ def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=2
             optimizer.zero_grad()
             logits = model(X_batch)
             loss = criterion(logits, y_batch)
-            loss_epoch.append(loss)
             loss.backward()
             optimizer.step()
-        loss_epoch = np.mean(loss_epoch.cpu().numpy())
+            loss_epoch.append(loss.cpu().numpy())
+        loss_epoch = np.mean(loss_epoch)
         writer.add_scalar("Training loss", loss_epoch, epoch)
         # Evaluate
         model.eval()
