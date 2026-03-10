@@ -320,8 +320,8 @@ def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=2
             for pred,true in zip(preds,labels_eval):
                 if int(true) == int(label):
                     total += 1
-                if int(pred) == int(label):
-                    correct += 1
+                    if int(pred) == int(true):
+                        correct += 1
             recall = correct / total
             writer.add_scalar(f"Test recall/sensitivity (class: {idx_to_class[label]})", recall, epoch)
 
