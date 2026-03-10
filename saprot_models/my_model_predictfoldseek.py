@@ -494,7 +494,7 @@ for label,val in class_to_idx.items():
             test_label.append(l)
             emb_label.append(e)
             embstr_label.append(s)
-    PCA_embeddings(emb_label, test_label, f"seq_{label}", title=f"Sequence-only embeddings (PCA) for class {label}", color_palette=colors_dict[val])
-    PCA_embeddings(embstr_label, test_label, f"str_{label}", title=f"Sequence+3Di embeddings (PCA) for class {label}", color_palette=colors_dict[val])
+    PCA_embeddings(emb_label, test_label, f"seq_{label}", title=f"Sequence-only embeddings (PCA) for class {label}")
+    PCA_embeddings(embstr_label, test_label, f"str_{label}", title=f"Sequence+3Di embeddings (PCA) for class {label}")
 
 
