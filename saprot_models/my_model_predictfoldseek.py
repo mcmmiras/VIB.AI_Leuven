@@ -506,6 +506,5 @@ plot_confusion(preds_struct, labels_struct,"str", class_to_idx.keys(),title="Seq
 y_test = [idx_to_class[y] for y in y_test]
 PCA_embeddings(test_seq_emb, y_test,"seq",title="Sequence-only embeddings (PCA)")
 PCA_embeddings(test_struct_aware_emb, y_test,"str", title="Sequence+3Di embeddings (PCA)")
-print("HERE")
 
 

@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
+from torch.utils.tensorboard import SummaryWriter
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, accuracy_score, classification_report
 from sklearn.utils.class_weight import compute_class_weight
@@ -271,7 +272,7 @@ class MLP(nn.Module):
 # ---------------------------
 # Training function
 # ---------------------------
-def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=20):
+def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=20, tag="seq"):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
@@ -288,6 +289,9 @@ def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=2
             loss = criterion(logits, y_batch)
             loss.backward()
             optimizer.step()
+        loss_epoch = [l.cpu().detach().numpy() for l in loss_epoch]
+        loss_epoch = np.mean(loss_epoch)
+        writer.add_scalar(f"{tag}/Training loss", loss_epoch, epoch)
         # Evaluate
         model.eval()
         preds = []
@@ -300,6 +304,17 @@ def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=2
                 preds.extend(pred)
                 labels_eval.extend(y_batch.cpu().numpy())
         acc = accuracy_score(labels_eval, preds)
+        writer.add_scalar(f"{tag}/Test accuracy (all classes)", accuracy_score(labels_eval, preds, normalize=True), epoch)
+        for label in idx_to_class.keys():
+            total = 0
+            correct = 0
+            for pred,true in zip(preds,labels_eval):
+                if int(true) == int(label):
+                    total += 1
+                    if int(pred) == int(true):
+                        correct += 1
+            recall = correct / total
+            writer.add_scalar(f"{tag}/Test recall (class: {idx_to_class[label]})", recall, epoch)
         if acc > best_acc:
             best_acc = acc
             best_preds = preds.copy()
@@ -307,11 +322,11 @@ def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=2
         print(f"\tEpoch {epoch + 1}/{epochs} - Test accuracy: {acc:.4f} (best: {best_acc:.4f})")
     return model, best_preds, best_labels
 
-def plot_confusion(preds, labels, tag, title="Confusion Matrix"):
-    cm = confusion_matrix(labels, preds)
-    plt.figure(figsize=(6,5))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
-                xticklabels=["TM","CC"], yticklabels=["TM","CC"])
+def plot_confusion(preds, labels, tag, classes, title="Confusion Matrix"):
+    cm = confusion_matrix(labels, preds, normalize="all")
+    plt.figure(figsize=(12,10))
+    sns.heatmap(cm, annot=True, fmt=".2f", cmap="Blues",
+                xticklabels=classes, yticklabels=classes)
     plt.xlabel("Predicted")
     plt.ylabel("True")
     plt.title(title)
@@ -319,14 +334,14 @@ def plot_confusion(preds, labels, tag, title="Confusion Matrix"):
     plt.show()
 
 # PCA scatter plot
-def PCA_embeddings(embeddings, labels, tag, title="Embedding PCA"):
+def PCA_embeddings(embeddings, labels, tag, title="Embedding PCA", color_palette = "tab10"):
     pca = PCA(n_components=2)
     emb_2d = pca.fit_transform(embeddings)
     plt.figure(figsize=(6,5))
     sns.scatterplot(
         x=emb_2d[:,0], y=emb_2d[:,1],
         hue=labels,
-        palette="tab10",   # geschikt voor meerdere klassen
+        palette=color_palette,   # geschikt voor meerdere klassen
         s=40, alpha=0.8
     )
     plt.title(title)
@@ -334,6 +349,24 @@ def PCA_embeddings(embeddings, labels, tag, title="Embedding PCA"):
     plt.tight_layout()
     plt.savefig(f"pca_{sys.argv[1].split('.')[0]}_{tag}.png")
     plt.show()
+    # 2) One plot per class (same coordinates, filtered labels)
+    labels = np.array(labels)
+    unique_labels = np.unique(labels)
+    lut = sns.color_palette(color_palette, n_colors=len(unique_labels))
+    color_scatter = dict(zip(unique_labels, lut))
+    for lab in unique_labels:
+        mask = (labels == lab)
+        plt.figure(figsize=(6, 5))
+        color = color_scatter[lab]
+        sns.scatterplot(
+            x=emb_2d[mask, 0], y=emb_2d[mask, 1],
+            color=color,
+            s=40, alpha=0.8
+        )
+        plt.title(f"{title} – class {lab}")
+        plt.tight_layout()
+        plt.savefig(f"pca_{sys.argv[1].split('.')[0]}_{tag}_class-{lab}.png")
+        plt.show()
 
 
 
@@ -341,9 +374,11 @@ def PCA_embeddings(embeddings, labels, tag, title="Embedding PCA"):
 # EXECUTION
 #pdb_path = "/media/mari/Data/vib_leuven/colab_tutorial/example1.pdb"
 errors =  open(f"errors_{sys.argv[1].split('.')[0]}.txt","w")
+writer = SummaryWriter(log_dir=f"{sys.argv[1].split('.')[0]}_run")
 all_labels_num = list()
 all_seq_embs = list()
 all_struct_aware_embs = list()
+all_labels = list()
 pdbs = pd.read_csv(os.path.join(os.getcwd(),"cc_tmb.csv"), header=0, sep="\t")
 pdbs = pdbs.set_index("pdb")
 for pdb in pdbs.index:
@@ -386,6 +421,16 @@ for pdb in pdbs.index:
         all_struct_aware_embs.append(ele)
     for ele in labels_num:
         all_labels_num.append(ele)
+        if ele not in all_labels:
+            all_labels.append(ele)
+
+print(all_labels)
+idx_to_class = {i: c for i, c in enumerate(all_labels)}
+class_to_idx = {c: i for i, c in idx_to_class.items()}
+print(class_to_idx)
+all_labels_map = list()
+for ele in all_labels_num:
+    all_labels_map.append(class_to_idx[ele])
 
 all_seq_embs = np.array(all_seq_embs)
 all_struct_aware_embs = np.array(all_struct_aware_embs)
@@ -417,11 +462,11 @@ embedding_dim = all_struct_aware_embs.shape[1]
 
 print("Training on sequence-only embeddings...")
 mlp_seq = MLP(input_dim=embedding_dim)
-mlp_seq, preds_seq, labels_seq = train_mlp(mlp_seq, train_loader_seq, test_loader_seq, class_weights_seq, lr=1e-3, epochs=20)
+mlp_seq, preds_seq, labels_seq = train_mlp(mlp_seq, train_loader_seq, test_loader_seq, class_weights_seq, lr=1e-3, epochs=20, tag="seq")
 
 print("Training on sequence+3Di embeddings...")
 mlp_struct = MLP(input_dim=embedding_dim)
-mlp_struct, preds_struct, labels_struct = train_mlp(mlp_struct, train_loader_struct, test_loader_struct, class_weights_struc,lr=1e-3, epochs=20)
+mlp_struct, preds_struct, labels_struct = train_mlp(mlp_struct, train_loader_struct, test_loader_struct, class_weights_struc,lr=1e-3, epochs=20, tag="str")
 # MLP model evaluation
 
 print("\nSequence-only classification report:")
@@ -432,9 +477,10 @@ print(classification_report(labels_struct, preds_struct, labels=list(range(2))))
 
 # Additional plots
 # Confusion matrix (true vs predicted labels)
-plot_confusion(preds_seq, labels_seq, "seq", title="Sequence-only MLP")
-plot_confusion(preds_struct, labels_struct,"str", title="Sequence+3Di MLP")
+plot_confusion(preds_seq, labels_seq, "seq", class_to_idx.keys(), title="Sequence-only MLP")
+plot_confusion(preds_struct, labels_struct,"str", class_to_idx.keys(),title="Sequence+3Di MLP")
 # PCA scatter plot of test embeddings and DSSP SS labels
+y_test = [idx_to_class[y] for y in y_test]
 PCA_embeddings(test_seq_emb, y_test,"seq",title="Sequence-only embeddings (PCA)")
 PCA_embeddings(test_struct_aware_emb, y_test,"str", title="Sequence+3Di embeddings (PCA)")
 
