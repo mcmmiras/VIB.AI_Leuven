@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
+from torch.utils.tensorboard import SummaryWriter
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, accuracy_score, classification_report
 from sklearn.utils.class_weight import compute_class_weight
@@ -282,14 +283,18 @@ def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=2
     best_preds = None
     best_labels = None
     for epoch in range(epochs):
+        loss_epoch = list()
         model.train()
         for X_batch, y_batch in train_loader:
             X_batch, y_batch = X_batch.to(device), y_batch.to(device)
             optimizer.zero_grad()
             logits = model(X_batch)
             loss = criterion(logits, y_batch)
+            loss_epoch.append(loss)
             loss.backward()
             optimizer.step()
+        loss_epoch = np.mean(loss_epoch)
+        writer.add_scalar("Training loss", loss_epoch, epoch)
         # Evaluate
         model.eval()
         preds = []
@@ -302,6 +307,18 @@ def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=2
                 preds.extend(pred)
                 labels_eval.extend(y_batch.cpu().numpy())
         acc = accuracy_score(labels_eval, preds)
+        writer.add_scalar("Test accuracy (all classes)", accuracy_score(labels_eval, preds, normalize=True), epoch)
+        for label in idx_to_class.keys():
+            total = 0
+            correct = 0
+            for pred,true in zip(preds,labels_eval):
+                if int(true) == int(label):
+                    total += 1
+                if int(pred) == int(label):
+                    correct += 1
+            recall = correct / total
+            writer.add_scalar(f"Test recall/sensitivity (class: {idx_to_class[label]})", recall, epoch)
+
         if acc > best_acc:
             best_acc = acc
             best_preds = preds.copy()
@@ -343,6 +360,7 @@ def PCA_embeddings(embeddings, labels, tag, title="Embedding PCA"):
 # EXECUTION
 #pdb_path = "/media/mari/Data/vib_leuven/colab_tutorial/example1.pdb"
 errors =  open(f"errors_{sys.argv[1].split('.')[0]}.txt","w")
+writer = SummaryWriter(log_dir=f"{sys.argv[1].split('.')[0]}_run")
 all_labels_num = list()
 all_seq_embs = list()
 all_struct_aware_embs = list()
@@ -387,6 +405,8 @@ for pdb in pdbs.index:
     for ele in struct_aware_emb:
         all_struct_aware_embs.append(ele)
     for ele in foldseek_seq:
+        if ele != "V":
+            ele = "N"
         all_labels_num.append(ele)
         if ele not in all_labels:
             all_labels.append(ele)
@@ -397,6 +417,7 @@ print(class_to_idx)
 all_labels_map = list()
 for ele in all_labels_num:
     all_labels_map.append(class_to_idx[ele])
+
 all_seq_embs = np.array(all_seq_embs)
 all_struct_aware_embs = np.array(all_struct_aware_embs)
 all_labels_num = np.array(all_labels_map)
