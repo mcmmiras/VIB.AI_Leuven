@@ -374,12 +374,12 @@ def PCA_embeddings(embeddings, labels, tag, title="Embedding PCA", color_palette
     # 2) One plot per class (same coordinates, filtered labels)
     labels = np.array(labels)
     unique_labels = np.unique(labels)
-    print(f"DEBUG: {len(embeddings)} total points, unique labels: {unique_labels}")
+    lut = sns.color_palette(color_palette, n_colors=len(unique_labels))
+    color_scatter = dict(zip(unique_labels, lut))
     for lab in unique_labels:
         mask = (labels == lab)
-        n_points = np.sum(mask)
-        print(f"DEBUG: Class '{lab}' has {n_points} points")
         plt.figure(figsize=(6, 5))
+        color = color_scatter[lab]
         sns.scatterplot(
             x=emb_2d[mask, 0], y=emb_2d[mask, 1],
             s=40, alpha=0.8
