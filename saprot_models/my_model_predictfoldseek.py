@@ -298,7 +298,7 @@ def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=2
             loss_epoch.append(loss)
             loss.backward()
             optimizer.step()
-        loss_epoch = np.mean(loss_epoch)
+        loss_epoch = np.mean(loss_epoch.cpu().numpy())
         writer.add_scalar("Training loss", loss_epoch, epoch)
         # Evaluate
         model.eval()
