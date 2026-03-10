@@ -294,7 +294,7 @@ class MLP(nn.Module):
 # ---------------------------
 # Training function
 # ---------------------------
-def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=20):
+def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=20, tag="seq"):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
@@ -315,7 +315,7 @@ def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=2
             optimizer.step()
         loss_epoch = [l.cpu().detach().numpy() for l in loss_epoch]
         loss_epoch = np.mean(loss_epoch)
-        writer.add_scalar("Training loss", loss_epoch, epoch)
+        writer.add_scalar(f"{tag}/Training loss", loss_epoch, epoch)
         # Evaluate
         model.eval()
         preds = []
@@ -328,7 +328,7 @@ def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=2
                 preds.extend(pred)
                 labels_eval.extend(y_batch.cpu().numpy())
         acc = accuracy_score(labels_eval, preds)
-        writer.add_scalar("Test accuracy (all classes)", accuracy_score(labels_eval, preds, normalize=True), epoch)
+        writer.add_scalar(f"{tag}/Test accuracy (all classes)", accuracy_score(labels_eval, preds, normalize=True), epoch)
         for label in idx_to_class.keys():
             total = 0
             correct = 0
@@ -338,7 +338,7 @@ def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=2
                     if int(pred) == int(true):
                         correct += 1
             recall = correct / total
-            writer.add_scalar(f"Test recall/sensitivity (class: {idx_to_class[label]})", recall, epoch)
+            writer.add_scalar(f"{tag}/Test recall (class: {idx_to_class[label]})", recall, epoch)
 
         if acc > best_acc:
             best_acc = acc
@@ -485,11 +485,11 @@ embedding_dim = all_struct_aware_embs.shape[1]
 
 print("Training on sequence-only embeddings...")
 mlp_seq = MLP(input_dim=embedding_dim, num_classes=len(class_to_idx.keys()))
-mlp_seq, preds_seq, labels_seq = train_mlp(mlp_seq, train_loader_seq, test_loader_seq, class_weights_seq, lr=1e-3, epochs=20)
+mlp_seq, preds_seq, labels_seq = train_mlp(mlp_seq, train_loader_seq, test_loader_seq, class_weights_seq, lr=1e-3, epochs=20, tag="seq")
 
 print("Training on sequence+3Di embeddings...")
 mlp_struct = MLP(input_dim=embedding_dim,  num_classes=len(class_to_idx.keys()))
-mlp_struct, preds_struct, labels_struct = train_mlp(mlp_struct, train_loader_struct, test_loader_struct, class_weights_struc,lr=1e-3, epochs=20)
+mlp_struct, preds_struct, labels_struct = train_mlp(mlp_struct, train_loader_struct, test_loader_struct, class_weights_struc,lr=1e-3, epochs=20, tag="str")
 # MLP model evaluation
 
 print("\nSequence-only classification report:")
