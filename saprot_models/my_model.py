@@ -98,7 +98,7 @@ def dssp_labels(pdb_id, pdb_path):
         numeric_label = 0
     print("\t- Built labels from DSSP. n_labels =", labels_np.shape[0])
     print("\t- Binary CC (1) vs TM (0) label:", numeric_label)
-    numeric_label = np.array(numeric_label)
+    #numeric_label = np.array(numeric_label)
     return numeric_label, selected_chain, labels_np
 
 # Generate foldseek annotation of structures
