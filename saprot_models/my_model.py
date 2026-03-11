@@ -437,6 +437,7 @@ for ele in all_labels_num:
 all_seq_embs = np.array(all_seq_embs)
 all_struct_aware_embs = np.array(all_struct_aware_embs)
 all_labels_num = np.array(all_labels_map)
+print("all_labels_map", all_labels_num)
 # Consistency check
 print("\nChecking all inputs:\n==========================================================================")
 if all_seq_embs.shape[0] != all_labels_num.shape[0]:
