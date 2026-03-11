@@ -93,9 +93,9 @@ def dssp_labels(pdb_id, pdb_path):
     # Numeric labels array
     labels_np = np.array([label_map.get(ch, 8) for ch in residue_labels], dtype=np.int64)
     if cc_check == True:
-        numeric_label = 1
+        numeric_label = "cc"
     else:
-        numeric_label = 0
+        numeric_label = "tmb"
     print("\t- Built labels from DSSP. n_labels =", labels_np.shape[0])
     print("\t- Binary CC (1) vs TM (0) label:", numeric_label)
     #numeric_label = np.array(numeric_label)
@@ -281,6 +281,7 @@ def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=2
     best_preds = None
     best_labels = None
     for epoch in range(epochs):
+        loss_epoch = []
         model.train()
         for X_batch, y_batch in train_loader:
             X_batch, y_batch = X_batch.to(device), y_batch.to(device)
@@ -289,6 +290,7 @@ def train_mlp(model, train_loader, test_loader, class_weights, lr=1e-3, epochs=2
             loss = criterion(logits, y_batch)
             loss.backward()
             optimizer.step()
+            loss_epoch.append(loss)
         loss_epoch = [l.cpu().detach().numpy() for l in loss_epoch]
         loss_epoch = np.mean(loss_epoch)
         writer.add_scalar(f"{tag}/Training loss", loss_epoch, epoch)
