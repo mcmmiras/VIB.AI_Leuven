@@ -493,10 +493,10 @@ mlp_struct, preds_struct, labels_struct = train_mlp(mlp_struct, train_loader_str
 # MLP model evaluation
 
 print("\nSequence-only classification report:")
-print(classification_report(labels_seq, preds_seq, target_names=class_to_idx.keys(),labels=class_to_idx.values()))
+print(classification_report(labels_seq, preds_seq,labels=class_to_idx.values(), target_names=class_to_idx.keys()))
 
 print("\nSequence+3Di classification report:")
-print(classification_report(labels_struct, preds_struct, target_names=class_to_idx.keys(),labels=class_to_idx.values()))
+print(classification_report(labels_struct, preds_struct,labels=class_to_idx.values(), target_names=class_to_idx.keys()))
 
 # Additional plots
 # Confusion matrix (true vs predicted labels)
