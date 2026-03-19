@@ -121,7 +121,7 @@ limit = 0
 allfiles = list()
 for file in os.listdir(sys.argv[1]):
     if "ai.txt" in file:
-        if limit == 100:
+        if limit == 1000000000000000:
             break
         allfiles.append(file)
         limit+=1
@@ -138,7 +138,7 @@ embeddings_test = list()
 limit = 0
 for file in os.listdir(sys.argv[1]):
     if "ai.txt" in file:
-        if limit == 100:
+        if limit == 1000000000000000:
             break
         try:
             data = pd.read_csv(file,sep="\t",header=0)
@@ -175,6 +175,8 @@ embeddings_test = [torch.tensor(emb,dtype=torch.float32) for emb in embeddings_t
 
 train_loader = DataLoader(dataset=embeddings_train, batch_size=batch_size, shuffle=True, drop_last=True)
 test_loader = DataLoader(dataset=embeddings_test, batch_size=batch_size, shuffle=True, drop_last=True)
+print(f"Total entries in training set: {len(train_loader)}\nTotal entries in testing set: {len(test_loader)}.")
+
 
 model = VQVAE().to(device)
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
