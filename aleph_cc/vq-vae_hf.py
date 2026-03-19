@@ -19,9 +19,11 @@ import matplotlib.pyplot as plt
 import torchvision
 import io
 from PIL import Image
+from sklearn.model_selection import train_test_split
 
+name = sys.argv[2]
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-writer = SummaryWriter(f"runs/test")
+writer = SummaryWriter(f"runs/{name}")
 
 batch_size = 64
 learning_rate = 1e-3
@@ -105,8 +107,8 @@ def vqvae_loss(recon_x, x, vq_loss):
 
 
 
-errors = open("errors.txt","w")
-predictions = open("predictions.txt","w")
+errors = open(f"errors_{name}.txt","w")
+predictions = open(f"predictions_{name}.txt","w")
 results_fs = list()
 results_aleph = list()
 results_both = list()
@@ -114,10 +116,29 @@ embeddings = list()
 labels = list()
 labelsFS = list()
 residues = list()
+
+limit = 0
+allfiles = list()
+for file in os.listdir(sys.argv[1]):
+    if "ai.txt" in file:
+        if limit == 100:
+            break
+        allfiles.append(file)
+        limit+=1
+
+train_df, test_df = train_test_split(
+    allfiles,
+    test_size=0.3,
+    random_state=312,  # for reproducibility
+)
+
+embeddings_train = list()
+embeddings_test = list()
+
 limit = 0
 for file in os.listdir(sys.argv[1]):
     if "ai.txt" in file:
-        if limit == 100000000000000000:
+        if limit == 100:
             break
         try:
             data = pd.read_csv(file,sep="\t",header=0)
@@ -136,7 +157,10 @@ for file in os.listdir(sys.argv[1]):
                     add = "para"
                 angle = round(float(data.at[i,"angle_ij"])/180,3)
                 emb = np.array((modi,modj,dist,angle))
-                embeddings.append(emb)
+                if file in train_df:
+                    embeddings_train.append(emb)
+                elif file in test_df:
+                    embeddings_test.append(emb)
                 ssij = data.at[i,"ss_ij"].split("-")
                 ssij = sorted(list(ssij))
                 labels.append(f"{('-').join(ssij)}_{add}")
@@ -146,9 +170,11 @@ for file in os.listdir(sys.argv[1]):
         except Exception as e:
             errors.write(f"{file} - Error: {e}\n")
 
-embeddings = [torch.tensor(emb,dtype=torch.float32) for emb in embeddings]
+embeddings_train = [torch.tensor(emb,dtype=torch.float32) for emb in embeddings_train]
+embeddings_test = [torch.tensor(emb,dtype=torch.float32) for emb in embeddings_test]
 
-train_loader = DataLoader(dataset=embeddings, batch_size=batch_size, shuffle=True, drop_last=True)
+train_loader = DataLoader(dataset=embeddings_train, batch_size=batch_size, shuffle=True, drop_last=True)
+test_loader = DataLoader(dataset=embeddings_test, batch_size=batch_size, shuffle=True, drop_last=True)
 
 model = VQVAE().to(device)
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -156,6 +182,7 @@ optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 for epoch in range(num_epochs):
     model.train()
     train_loss = 0
+    test_loss = 0
     # Use tqdm for the progress bar
     pbar = tqdm(enumerate(train_loader), total=len(train_loader), desc=f'Epoch {epoch + 1}/{num_epochs}')
     for batch_idx, data in pbar:
@@ -172,7 +199,62 @@ for epoch in range(num_epochs):
     writer.add_scalar("Training Loss", avg_loss, epoch+1)
     print(f'Epoch [{epoch + 1}/{num_epochs}] Average Loss: {avg_loss:.4f}')
     # Save and display a sample of the reconstructed images
-    if (epoch + 1) % 2 == 0:
+    if (epoch + 1) % 10 == 0:
+        #### CHECK TEST BATCHES ####
+        with torch.no_grad():
+            for batch_test, data_test in enumerate(test_loader):
+                data_test = data_test.to(device)
+                recon_batch_test, vq_loss_test = model(data_test)
+                loss_test = vqvae_loss(recon_batch_test, data_test, vq_loss_test)
+                test_loss += loss_test.item()
+                # Get encoder outputs (z_e) and discrete codes for this batch
+                z_e = model.encoder(data_test).cpu()  # (10, 2) - continuous latents
+                _, _, discrete_codes = model.vq_layer(model.encoder(data_test))  # discrete indices
+                # Extract codebook
+                codebook_vectors = model.vq_layer.embedding.weight.data.cpu().numpy()
+                fig = plt.figure(figsize=(10, 8))
+                # 1. Plot CODEBOOK VECTORS (big black circles, colored by index)
+                plt.scatter(codebook_vectors[:, 0], codebook_vectors[:, 1],
+                            c=range(20), cmap='tab20', s=200, edgecolors='black', linewidth=1,
+                            label='Codebook (20 discrete states)', zorder=3)
+                # 2. Plot ENCODER OUTPUTS (small gray dots) + color by assigned code
+                scatter = plt.scatter(z_e[:, 0], z_e[:, 1],
+                                      c=discrete_codes.cpu(), cmap='tab20', s=60, alpha=0.7,
+                                      edgecolors='gray', linewidth=0.5,
+                                      label='Encoder outputs (your batch)', zorder=2)
+                # 3. Lines connecting each z_e to its assigned codebook vector
+                for i in range(len(z_e)):
+                    code_idx = discrete_codes[i].item()
+                    code_pos = codebook_vectors[code_idx]
+                    z_pos = z_e[i]
+                    plt.plot([z_pos[0], code_pos[0]], [z_pos[1], code_pos[1]],
+                             'k-', alpha=0.3, linewidth=1, zorder=1)
+                plt.colorbar(label='Code index (0-19)')
+                plt.grid(True, alpha=0.3)
+                plt.xlabel('Latent Dimension 1')
+                plt.ylabel('Latent Dimension 2')
+                plt.title(f'Codebook + Batch {len(z_e)} Encoder Outputs (Epoch {epoch + 1})')
+                plt.legend()
+                # Label codebook points
+                for i, (x, y) in enumerate(codebook_vectors):
+                    plt.annotate(f'{i}', (x, y), xytext=(5, 5), textcoords='offset points',
+                                 fontsize=10, fontweight='bold')
+                plt.tight_layout()
+
+                # Convert figure to image and add to TensorBoard
+                buf = io.BytesIO()
+                fig.savefig(buf, format='png', bbox_inches='tight')
+                buf.seek(0)
+                img = Image.open(buf)
+                img = np.array(img)
+                writer.add_image(f"Epoch {epoch+1}: Codebook + Test Batch {len(z_e)} Encoder Outputs", img, batch_test+1, dataformats='HWC')
+                #plt.show()
+                buf.close()
+                plt.close(fig)
+            avg_loss_test = test_loss / len(test_loader)
+            writer.add_scalar("Test Loss", avg_loss_test, epoch + 1)
+        """
+        ##### CHECK TRAINING IMAGES ####
         with torch.no_grad():
             recon_batch, _ = model(data)
             # Get encoder outputs (z_e) and discrete codes for this batch
@@ -218,3 +300,4 @@ for epoch in range(num_epochs):
             writer.add_image(f"Codebook + Batch {len(z_e)} Encoder Outputs", img, epoch+1, dataformats='HWC')
             #plt.show()
             buf.close()
+        """
