@@ -25,7 +25,7 @@ writer = SummaryWriter(f"runs/test")
 
 batch_size = 64
 learning_rate = 1e-3
-num_epochs = 10
+num_epochs = 100
 input_dim = 4
 latent_dim = 2
 num_embeddings = 20  # Number of vectors in the codebook
@@ -117,7 +117,7 @@ residues = list()
 limit = 0
 for file in os.listdir(sys.argv[1]):
     if "ai.txt" in file:
-        if limit == 100:
+        if limit == 100000000000000000:
             break
         try:
             data = pd.read_csv(file,sep="\t",header=0)
