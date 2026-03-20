@@ -1,6 +1,4 @@
 #!usr/bin/env python3
-from genericpath import exists
-
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.cluster import KMeans
@@ -132,7 +130,7 @@ limit = 0
 allfiles = list()
 for file in os.listdir(sys.argv[1]):
     if "ai.txt" in file:
-        if limit == 1000000000000000000:
+        if limit == 1000000000000000000000000000000000000:
             break
         allfiles.append(file)
         limit+=1
@@ -142,6 +140,13 @@ train_df, test_df = train_test_split(
     test_size=0.3,
     random_state=312,  # for reproducibility
 )
+with open(f"{name}_train_set.txt","w") as df:
+    for ele in train_df:
+        df.write(f"{ele}\n")
+
+with open(f"{name}_test_set.txt","w") as df:
+    for ele in test_df:
+        df.write(f"{ele}\n")
 
 embeddings_train = list()
 embeddings_test = list()
@@ -150,7 +155,7 @@ emb_test_ids = list()
 limit = 0
 for file in os.listdir(sys.argv[1]):
     if "ai.txt" in file:
-        if limit == 1000000000000000000:
+        if limit == 1000000000000000000000000000000000000:
             break
         try:
             data = pd.read_csv(file,sep="\t",header=0)
@@ -167,13 +172,13 @@ for file in os.listdir(sys.argv[1]):
                 angle = float(data.at[i,"angle_ij"])
                 add = scalar_product(float(modi), float(modj), angle)
                 angle = round(float(data.at[i,"angle_ij"])/180,3)
+                ssij = data.at[i,"ss_ij"].split("-")
                 emb = np.array((modi,modj,dist,angle))
                 if file in train_df:
                     embeddings_train.append(emb)
                 elif file in test_df:
                     embeddings_test.append(emb)
-                    emb_test_ids.append((file.replace("_ai.txt",""),resi,f"{fs}_{add}"))
-                ssij = data.at[i,"ss_ij"].split("-")
+                    emb_test_ids.append((file.replace("_ai.txt",""),resi,f"{fs}_{add}",ssij[0]))
                 ssij = sorted(list(ssij))
                 labels.append(f"{('-').join(ssij)}_{add}")
                 labelsFS.append(f"{data.at[i, "FS_token"]}_{add}")
@@ -214,7 +219,7 @@ for epoch in range(num_epochs):
     writer.add_scalar("Training Loss", avg_loss, epoch+1)
     print(f'Epoch [{epoch + 1}/{num_epochs}] Average Loss: {avg_loss:.4f}')
     # Save and display a sample of the reconstructed images
-    if (epoch + 1) % 2 == 0:
+    if (epoch + 1) % 10 == 0:
         #### CHECK TEST BATCHES ####
         with torch.no_grad():
             for batch_test, data_test in enumerate(test_loader):
@@ -327,11 +332,11 @@ else:
     # emb_test_ids.append((file.replace("_ai.txt",""),resi,f"{fs}_{add}"))
     currentPDB = ""
     for emb,label in zip(emb_test_ids, emb_test_preds):
-        pdb, resi, fs = emb
+        pdb, resi, fs, ss = emb
         if currentPDB != pdb:
             currentPDB = pdb
             print(currentPDB)
             out = open(f"results/{name}/{currentPDB}.csv","w")
-            out.write(f"Residue\tFoldSeek\tALEPH\n")
-        print(f"- {resi}\tFS:{fs}\tALEPH:{label}")
-        out.write(f"{resi}\t{fs}\t{label}\n")
+            out.write(f"Residue\tSS\tFoldSeek\tALEPH\n")
+        print(f"- {resi}\tSS:{ss}\tFS:{fs}\tALEPH:{label}")
+        out.write(f"{resi}\t{ss}\t{fs}\t{label}\n")
