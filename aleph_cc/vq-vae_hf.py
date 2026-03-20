@@ -1,10 +1,12 @@
 #!usr/bin/env python3
+from genericpath import exists
 
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.cluster import KMeans
 import pandas as pd
 import sys, os
+import math
 from collections import defaultdict, Counter
 import torch
 import torch.nn as nn
@@ -22,9 +24,10 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 
 name = sys.argv[2]
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device("cuda")
 writer = SummaryWriter(f"runs/{name}")
-
+os.makedirs(f"results/{name}", exist_ok=True)
 batch_size = 64
 learning_rate = 1e-3
 num_epochs = 100
@@ -47,7 +50,6 @@ class VQEmbedding(nn.Module):
     def forward(self, z):
         batch_size_z, emb_dim_z = z.shape
         z_flattened = z
-
         # Calculate distances between z and the codebook embeddings |a-b|²
         distances = (
             torch.sum(z_flattened ** 2, dim=-1, keepdim=True)                 # a²
@@ -105,7 +107,16 @@ def vqvae_loss(recon_x, x, vq_loss):
     recon_loss = F.mse_loss(recon_x, x)
     return recon_loss + vq_loss
 
-
+def scalar_product(mod1,mod2,ang, eps=1e-8):
+    ang = math.radians(angle)
+    cos = math.cos(ang)
+    dot = mod1*mod2*cos
+    if dot > eps:
+        return "para"
+    elif dot < -eps:
+        return "anti"
+    else:
+        return "neutral"
 
 errors = open(f"errors_{name}.txt","w")
 predictions = open(f"predictions_{name}.txt","w")
@@ -121,7 +132,7 @@ limit = 0
 allfiles = list()
 for file in os.listdir(sys.argv[1]):
     if "ai.txt" in file:
-        if limit == 1000000000000000:
+        if limit == 1000000000000000000:
             break
         allfiles.append(file)
         limit+=1
@@ -134,33 +145,34 @@ train_df, test_df = train_test_split(
 
 embeddings_train = list()
 embeddings_test = list()
+emb_test_ids = list()
 
 limit = 0
 for file in os.listdir(sys.argv[1]):
     if "ai.txt" in file:
-        if limit == 1000000000000000:
+        if limit == 1000000000000000000:
             break
         try:
             data = pd.read_csv(file,sep="\t",header=0)
             if len(data.index) < 1:
                 continue
             for i in data.index:
+                resi = data.at[i,"i"]
+                fs = data.at[i,"FS_token"]
                 modi = data.at[i,"module_CVi"]
                 modj = data.at[i,"module_CVj"]
                 dist = round(float(data.at[i,"dist_ij"])/11,3)
                 if dist > 1:
                     continue
                 angle = float(data.at[i,"angle_ij"])
-                if float(angle)  >90:
-                    add = "anti"
-                else:
-                    add = "para"
+                add = scalar_product(float(modi), float(modj), angle)
                 angle = round(float(data.at[i,"angle_ij"])/180,3)
                 emb = np.array((modi,modj,dist,angle))
                 if file in train_df:
                     embeddings_train.append(emb)
                 elif file in test_df:
                     embeddings_test.append(emb)
+                    emb_test_ids.append((file.replace("_ai.txt",""),resi,f"{fs}_{add}"))
                 ssij = data.at[i,"ss_ij"].split("-")
                 ssij = sorted(list(ssij))
                 labels.append(f"{('-').join(ssij)}_{add}")
@@ -174,12 +186,13 @@ embeddings_train = [torch.tensor(emb,dtype=torch.float32) for emb in embeddings_
 embeddings_test = [torch.tensor(emb,dtype=torch.float32) for emb in embeddings_test]
 
 train_loader = DataLoader(dataset=embeddings_train, batch_size=batch_size, shuffle=True, drop_last=True)
-test_loader = DataLoader(dataset=embeddings_test, batch_size=batch_size, shuffle=True, drop_last=True)
+test_loader = DataLoader(dataset=embeddings_test, batch_size=batch_size, shuffle=False, drop_last=False)
 print(f"Total entries in training set: {len(train_loader)}\nTotal entries in testing set: {len(test_loader)}.")
 
 
 model = VQVAE().to(device)
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+emb_test_preds = list()
 # Training Loop
 for epoch in range(num_epochs):
     model.train()
@@ -201,7 +214,7 @@ for epoch in range(num_epochs):
     writer.add_scalar("Training Loss", avg_loss, epoch+1)
     print(f'Epoch [{epoch + 1}/{num_epochs}] Average Loss: {avg_loss:.4f}')
     # Save and display a sample of the reconstructed images
-    if (epoch + 1) % 10 == 0:
+    if (epoch + 1) % 2 == 0:
         #### CHECK TEST BATCHES ####
         with torch.no_grad():
             for batch_test, data_test in enumerate(test_loader):
@@ -227,6 +240,8 @@ for epoch in range(num_epochs):
                 # 3. Lines connecting each z_e to its assigned codebook vector
                 for i in range(len(z_e)):
                     code_idx = discrete_codes[i].item()
+                    if epoch+1 == num_epochs:
+                        emb_test_preds.append(code_idx)
                     code_pos = codebook_vectors[code_idx]
                     z_pos = z_e[i]
                     plt.plot([z_pos[0], code_pos[0]], [z_pos[1], code_pos[1]],
@@ -303,3 +318,20 @@ for epoch in range(num_epochs):
             #plt.show()
             buf.close()
         """
+PATH = f'./{name}_vqvae_net.pth'
+torch.save(model.state_dict(), PATH)
+
+if len(emb_test_ids) != len(emb_test_preds):
+    print("Error: test embeddings and labels length do not match")
+else:
+    # emb_test_ids.append((file.replace("_ai.txt",""),resi,f"{fs}_{add}"))
+    currentPDB = ""
+    for emb,label in zip(emb_test_ids, emb_test_preds):
+        pdb, resi, fs = emb
+        if currentPDB != pdb:
+            currentPDB = pdb
+            print(currentPDB)
+            out = open(f"results/{name}/{currentPDB}.csv","w")
+            out.write(f"Residue\tFoldSeek\tALEPH\n")
+        print(f"- {resi}\tFS:{fs}\tALEPH:{label}")
+        out.write(f"{resi}\t{fs}\t{label}\n")
